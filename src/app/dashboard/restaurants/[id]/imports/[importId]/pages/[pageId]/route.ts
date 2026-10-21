@@ -9,7 +9,7 @@ import {
   NotFoundError,
 } from "@/lib/errors";
 import { getMenuImport } from "@/server/services/imports";
-import { getSignedObjectUrl } from "@/server/services/storage";
+import { getSignedPrivateObjectUrl } from "@/server/services/storage";
 
 export async function GET(
   _request: Request,
@@ -39,7 +39,7 @@ export async function GET(
       throw new NotFoundError("Import page not found.");
     }
 
-    const signedUrl = await getSignedObjectUrl(
+    const signedUrl = await getSignedPrivateObjectUrl(
       page.privateSourceObjectKey,
       300,
     );

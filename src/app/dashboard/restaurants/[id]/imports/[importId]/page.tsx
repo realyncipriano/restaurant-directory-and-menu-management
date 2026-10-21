@@ -32,6 +32,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-PH", {
 });
 
 const statusStyles: Record<string, string> = {
+  uploading: "bg-sky-50 text-sky-700 ring-sky-600/20",
   uploaded: "bg-zinc-100 text-zinc-700 ring-zinc-500/20",
   processing: "bg-sky-50 text-sky-700 ring-sky-600/20",
   needs_review: "bg-amber-50 text-amber-800 ring-amber-600/20",

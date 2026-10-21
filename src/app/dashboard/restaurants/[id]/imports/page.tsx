@@ -14,7 +14,7 @@ import { NotFoundError } from "@/lib/errors";
 import { listMenuImports } from "@/server/services/imports";
 import { listMenusForRestaurant } from "@/server/services/menus";
 import { getRestaurantDetail } from "@/server/services/restaurants";
-import { isStorageConfigured } from "@/server/services/storage";
+import { isPrivateStorageConfigured } from "@/server/services/storage";
 
 export const metadata: Metadata = {
   title: "Menu scans",
@@ -27,6 +27,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-PH", {
 });
 
 const statusStyles: Record<string, string> = {
+  uploading: "bg-sky-50 text-sky-700 ring-sky-600/20",
   uploaded: "bg-zinc-100 text-zinc-700 ring-zinc-500/20",
   processing: "bg-sky-50 text-sky-700 ring-sky-600/20",
   needs_review: "bg-amber-50 text-amber-800 ring-amber-600/20",
@@ -64,7 +65,7 @@ export default async function MenuImportsPage({
     .filter((menu) => menu.draft)
     .map((menu) => ({ id: menu.draft?.id ?? "", title: menu.title }))
     .filter((menu) => menu.id);
-  const storageConfigured = isStorageConfigured();
+  const storageConfigured = isPrivateStorageConfigured();
   const extractionConfigured = isExtractionConfigured();
   const maxPages = getExtractionConfig()?.maxPages ?? 10;
   const error = typeof query.error === "string" ? query.error : undefined;

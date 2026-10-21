@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { fileTypeFromBuffer } from "file-type";
 import sharp from "sharp";
 
@@ -30,6 +30,7 @@ import { extractMenuItems } from "@/lib/extraction/openai";
 import { writeAuditLog } from "./audit";
 import {
   getMenuAccess,
+  lockDraftMenu,
   requireDraftEditable,
 } from "./menu-access";
 import { requireRestaurantPermission } from "./restaurant-access";
@@ -40,13 +41,18 @@ import {
 } from "./menu-tree";
 import {
   buildObjectKey,
-  deleteObject,
-  isStorageConfigured,
-  putObject,
-  readObject,
+  deletePrivateObject,
+  getSignedPrivatePutUrl,
+  headPrivateObject,
+  isPrivateStorageConfigured,
+  readPrivateObject,
 } from "./storage";
 
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
+const STALE_PROCESSING_MS = 15 * 60 * 1000;
+const MAX_PROCESSING_ATTEMPTS = 3;
+
+class LostImportClaimError extends Error {}
 const ALLOWED_SOURCE_MIME = new Map([
   ["image/jpeg", "jpg"],
   ["image/png", "png"],
@@ -117,25 +123,26 @@ async function writeVariantsAndModifiers(
   }
 }
 
-export async function createMenuImport(
-  db: DbClient,
-  actorId: string,
-  restaurantId: string,
-  menuId: string,
-  files: FormDataEntryValue[],
-): Promise<string> {
-  const { access, menu } = await requireDraftEditable(db, actorId, menuId);
-  if (access.restaurant.id !== restaurantId) {
-    throw new NotFoundError("Menu not found.");
-  }
-  if (!isStorageConfigured()) {
-    throw new ConflictError(
-      "Private scan storage is not configured. Set the R2 credentials first.",
-    );
-  }
+export type ImportUploadFile = {
+  name: string;
+  size: number;
+  type: string;
+};
 
-  const config = getExtractionConfig();
-  const maxPages = config?.maxPages ?? 10;
+export type BeginImportResult = {
+  importId: string;
+  uploads: {
+    pageNumber: number;
+    key: string;
+    contentType: string;
+    url: string;
+  }[];
+};
+
+function validateUploadFiles(
+  files: ImportUploadFile[],
+  maxPages: number,
+): { extension: string; contentType: string; sizeBytes: number }[] {
   if (files.length === 0) {
     throw new ValidationError("Choose at least one menu image to scan.");
   }
@@ -143,85 +150,189 @@ export async function createMenuImport(
     throw new ValidationError(`Upload at most ${maxPages} page images at once.`);
   }
 
+  return files.map((file) => {
+    if (!file.name || file.size <= 0) {
+      throw new ValidationError("One of the selected files is empty.");
+    }
+    if (file.size > MAX_SOURCE_BYTES) {
+      throw new ValidationError("Each scan page must be 8 MB or smaller.");
+    }
+    const extension = ALLOWED_SOURCE_MIME.get(file.type);
+    if (!extension) {
+      throw new ValidationError(
+        "Scan pages must be JPEG, PNG, or WebP images.",
+      );
+    }
+    return { extension, contentType: file.type, sizeBytes: file.size };
+  });
+}
+
+export async function beginMenuImport(
+  db: DbClient,
+  actorId: string,
+  restaurantId: string,
+  menuId: string,
+  files: ImportUploadFile[],
+): Promise<BeginImportResult> {
+  const { access, menu } = await requireDraftEditable(db, actorId, menuId);
+  if (access.restaurant.id !== restaurantId) {
+    throw new NotFoundError("Menu not found.");
+  }
+  if (!isPrivateStorageConfigured()) {
+    throw new ConflictError(
+      "Private scan storage is not configured. Set R2_PRIVATE_BUCKET first.",
+    );
+  }
+
+  const config = getExtractionConfig();
+  const maxPages = config?.maxPages ?? 10;
+  const validated = validateUploadFiles(files, maxPages);
   const importId = randomUUID();
-  const uploadedKeys: string[] = [];
-  const prepared: {
-    key: string;
-    mimeType: string;
-    sizeBytes: number;
-  }[] = [];
+  const now = new Date();
+  const prepared = validated.map((file, index) => ({
+    pageNumber: index + 1,
+    key: buildObjectKey(`imports/${importId}/page-${index + 1}`, file.extension),
+    mimeType: file.contentType,
+    sizeBytes: file.sizeBytes,
+  }));
+
+  await db.transaction(async (tx) => {
+    await tx.insert(menuImports).values({
+      id: importId,
+      restaurantId,
+      menuId: menu.id,
+      uploadedBy: access.actor.id,
+      status: "uploading",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await tx.insert(menuImportPages).values(
+      prepared.map((page) => ({
+        importId,
+        pageNumber: page.pageNumber,
+        privateSourceObjectKey: page.key,
+        mimeType: page.mimeType,
+        sizeBytes: page.sizeBytes,
+        processingStatus: "pending" as const,
+        createdAt: now,
+        updatedAt: now,
+      })),
+    );
+  });
 
   try {
-    for (const [index, file] of files.entries()) {
-      if (!(file instanceof File)) {
-        throw new ValidationError("One of the selected files could not be read.");
-      }
-      if (file.size === 0) {
-        throw new ValidationError("One of the selected files is empty.");
-      }
-      if (file.size > MAX_SOURCE_BYTES) {
-        throw new ValidationError("Each scan page must be 8 MB or smaller.");
-      }
+    const uploads = await Promise.all(
+      prepared.map(async (page) => ({
+        pageNumber: page.pageNumber,
+        key: page.key,
+        contentType: page.mimeType,
+        url: await getSignedPrivatePutUrl(page.key, page.mimeType),
+      })),
+    );
+    return { importId, uploads };
+  } catch (error) {
+    await Promise.all(
+      prepared.map((page) => deletePrivateObject(page.key)),
+    );
+    await db.delete(menuImports).where(eq(menuImports.id, importId));
+    throw error;
+  }
+}
 
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const detected = await fileTypeFromBuffer(buffer);
-      const extension = detected
-        ? ALLOWED_SOURCE_MIME.get(detected.mime)
-        : undefined;
-      if (!detected || !extension) {
+export async function confirmMenuImport(
+  db: DbClient,
+  actorId: string,
+  importId: string,
+): Promise<void> {
+  const data = await getMenuImport(db, actorId, importId);
+  await requireDraftEditable(db, actorId, data.menu.id);
+
+  if (data.import.status === "uploaded") return;
+  if (data.import.status !== "uploading") {
+    throw new ConflictError("This import is not awaiting an upload.");
+  }
+  if (data.pages.length === 0) {
+    throw new ConflictError("This import has no pages to confirm.");
+  }
+
+  const now = new Date();
+  try {
+    for (const page of data.pages) {
+      const head = await headPrivateObject(page.privateSourceObjectKey);
+      if (
+        head.contentLength === null ||
+        head.contentLength <= 0 ||
+        head.contentLength > MAX_SOURCE_BYTES
+      ) {
+        throw new ValidationError(
+          "Each scan page must be a non-empty image up to 8 MB.",
+        );
+      }
+      if (!head.contentType || !ALLOWED_SOURCE_MIME.has(head.contentType)) {
         throw new ValidationError(
           "Scan pages must be JPEG, PNG, or WebP images.",
         );
       }
 
-      const key = buildObjectKey(
-        `imports/${importId}/page-${index + 1}`,
-        extension,
-      );
-      await putObject(
-        key,
-        buffer,
-        detected.mime,
-        "private, no-store",
-      );
-      uploadedKeys.push(key);
-      prepared.push({
-        key,
-        mimeType: detected.mime,
-        sizeBytes: buffer.length,
-      });
+      const buffer = await readPrivateObject(page.privateSourceObjectKey);
+      const detected = await fileTypeFromBuffer(buffer);
+      if (!detected || !ALLOWED_SOURCE_MIME.has(detected.mime)) {
+        throw new ValidationError(
+          "Scan pages must be JPEG, PNG, or WebP images.",
+        );
+      }
     }
 
     await db.transaction(async (tx) => {
-      const now = new Date();
-      await tx.insert(menuImports).values({
-        id: importId,
-        restaurantId,
-        menuId: menu.id,
-        uploadedBy: access.actor.id,
-        status: "uploaded",
-        createdAt: now,
-        updatedAt: now,
-      });
-
-      await tx.insert(menuImportPages).values(
-        prepared.map((page, index) => ({
-          importId,
-          pageNumber: index + 1,
-          privateSourceObjectKey: page.key,
-          mimeType: page.mimeType,
-          sizeBytes: page.sizeBytes,
-          processingStatus: "uploaded" as const,
-          createdAt: now,
+      const [updated] = await tx
+        .update(menuImports)
+        .set({
+          status: "uploaded",
+          uploadCompletedAt: now,
           updatedAt: now,
-        })),
-      );
-    });
+        })
+        .where(
+          and(
+            eq(menuImports.id, importId),
+            eq(menuImports.status, "uploading"),
+          ),
+        )
+        .returning({ id: menuImports.id });
+      if (!updated) {
+        throw new ConflictError("This import is no longer awaiting an upload.");
+      }
 
-    return importId;
+      await tx
+        .update(menuImportPages)
+        .set({ processingStatus: "uploaded", updatedAt: now })
+        .where(eq(menuImportPages.importId, importId));
+    });
   } catch (error) {
-    await Promise.all(uploadedKeys.map((key) => deleteObject(key)));
-    throw error;
+    await Promise.all(
+      data.pages.map((page) =>
+        deletePrivateObject(page.privateSourceObjectKey),
+      ),
+    );
+    await db
+      .update(menuImports)
+      .set({
+        status: "failed",
+        errorDetails: {
+          message:
+            error instanceof ValidationError
+              ? error.message
+              : "The uploaded scan pages could not be verified.",
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(menuImports.id, importId));
+    await db
+      .update(menuImportPages)
+      .set({ processingStatus: "failed", updatedAt: new Date() })
+      .where(eq(menuImportPages.importId, importId));
+    if (error instanceof ValidationError) throw error;
+    throw new ConflictError("The uploaded scan pages could not be verified.");
   }
 }
 
@@ -362,10 +473,16 @@ export async function processMenuImport(
   }
   if (
     row.menuImport.status !== "uploaded" &&
-    row.menuImport.status !== "failed"
+    row.menuImport.status !== "failed" &&
+    row.menuImport.status !== "processing"
   ) {
     throw new ConflictError(
       "This import cannot be processed again. Upload a new scan to re-extract.",
+    );
+  }
+  if (row.menuImport.attemptCount >= MAX_PROCESSING_ATTEMPTS) {
+    throw new ConflictError(
+      "This import has reached the retry limit. Upload a new scan to try again.",
     );
   }
 
@@ -384,13 +501,32 @@ export async function processMenuImport(
   }
 
   const now = new Date();
+  const staleBefore = new Date(now.getTime() - STALE_PROCESSING_MS);
+  const processingToken = randomUUID();
   const claimed = await db
     .update(menuImports)
-    .set({ status: "processing", errorDetails: null, updatedAt: now })
+    .set({
+      status: "processing",
+      processingToken,
+      processingStartedAt: now,
+      lastAttemptAt: now,
+      attemptCount: sql`${menuImports.attemptCount} + 1`,
+      errorDetails: null,
+      updatedAt: now,
+    })
     .where(
       and(
         eq(menuImports.id, importId),
-        inArray(menuImports.status, ["uploaded", "failed"]),
+        or(
+          inArray(menuImports.status, ["uploaded", "failed"]),
+          and(
+            eq(menuImports.status, "processing"),
+            or(
+              isNull(menuImports.processingStartedAt),
+              lt(menuImports.processingStartedAt, staleBefore),
+            ),
+          ),
+        ),
       ),
     )
     .returning({ id: menuImports.id });
@@ -405,7 +541,18 @@ export async function processMenuImport(
 
     const images: { dataUrl: string }[] = [];
     for (const page of pages) {
-      const buffer = await readObject(page.privateSourceObjectKey);
+      const buffer = await readPrivateObject(page.privateSourceObjectKey);
+      if (buffer.length > MAX_SOURCE_BYTES) {
+        throw new ValidationError(
+          "Each scan page must be 8 MB or smaller.",
+        );
+      }
+      const detected = await fileTypeFromBuffer(buffer);
+      if (!detected || !ALLOWED_SOURCE_MIME.has(detected.mime)) {
+        throw new ValidationError(
+          "Scan pages must be JPEG, PNG, or WebP images.",
+        );
+      }
       const normalized = await sharp(buffer, {
         limitInputPixels: 40_000_000,
       })
@@ -497,6 +644,24 @@ export async function processMenuImport(
         }
       }
 
+      const [finished] = await tx
+        .update(menuImports)
+        .set({
+          status: "needs_review",
+          extractionProvider: `${config.provider}:${config.model}`,
+          processingToken: null,
+          processingStartedAt: null,
+          updatedAt: processedAt,
+        })
+        .where(
+          and(
+            eq(menuImports.id, importId),
+            eq(menuImports.processingToken, processingToken),
+          ),
+        )
+        .returning({ id: menuImports.id });
+      if (!finished) throw new LostImportClaimError();
+
       await tx
         .update(menuImportPages)
         .set({
@@ -509,22 +674,35 @@ export async function processMenuImport(
           updatedAt: processedAt,
         })
         .where(eq(menuImportPages.importId, importId));
-
-      await tx
-        .update(menuImports)
-        .set({
-          status: "needs_review",
-          extractionProvider: `${config.provider}:${config.model}`,
-          updatedAt: processedAt,
-        })
-        .where(eq(menuImports.id, importId));
     });
   } catch (error) {
+    if (error instanceof LostImportClaimError) {
+      throw new ConflictError(
+        "This import was reclaimed by another process. Refresh to see its status.",
+      );
+    }
+
     const message =
       error instanceof ValidationError
         ? error.message
         : "Menu extraction failed. Check the provider configuration and try again.";
     console.error("[imports] Menu import failed.", importId, error);
+
+    const [owned] = await db
+      .select({ id: menuImports.id })
+      .from(menuImports)
+      .where(
+        and(
+          eq(menuImports.id, importId),
+          eq(menuImports.processingToken, processingToken),
+        ),
+      )
+      .limit(1);
+    if (!owned) {
+      throw new ConflictError(
+        "This import was reclaimed by another process. Refresh to see its status.",
+      );
+    }
 
     let cleanupIncomplete = false;
     try {
@@ -546,9 +724,16 @@ export async function processMenuImport(
         errorDetails: cleanupIncomplete
           ? { message, cleanupIncomplete: true }
           : { message },
+        processingToken: null,
+        processingStartedAt: null,
         updatedAt: new Date(),
       })
-      .where(eq(menuImports.id, importId));
+      .where(
+        and(
+          eq(menuImports.id, importId),
+          eq(menuImports.processingToken, processingToken),
+        ),
+      );
     await db
       .update(menuImportPages)
       .set({ processingStatus: "failed", updatedAt: new Date() })
@@ -716,6 +901,7 @@ export async function applyMenuImport(
       throw new ConflictError("This import is not ready to apply.");
     }
 
+    await lockDraftMenu(tx, menu.id);
     const tree = await loadMenuTree(tx, menu.id);
     if (!tree) throw new NotFoundError("Target menu not found.");
 

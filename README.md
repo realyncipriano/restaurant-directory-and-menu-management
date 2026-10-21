@@ -95,7 +95,7 @@ npm run test:integration  # only with a verified disposable test database
 
 ### Cloudflare R2
 
-Uploads and private source scans are disabled until these are set:
+Public image uploads are disabled until these are set:
 
 - `R2_ACCOUNT_ID`
 - `R2_ACCESS_KEY_ID`
@@ -103,8 +103,12 @@ Uploads and private source scans are disabled until these are set:
 - `R2_BUCKET`
 - `R2_PUBLIC_BASE_URL` for public images only
 
-Private menu scans are never served from the public bucket URL. The app proxies
-authorized access to short-lived signed URLs.
+Menu scan uploads additionally require `R2_PRIVATE_BUCKET`, a separate bucket
+that is not publicly readable. Scans are never served from the public bucket
+URL: the browser uploads directly with short-lived presigned PUT URLs, and
+authorized previews use short-lived signed GET URLs. Configure the private
+bucket's CORS policy to allow `PUT`, `GET`, and `HEAD` from your `APP_URL`
+origin, with `content-type` allowed and `ETag` exposed.
 
 ### Menu extraction
 
@@ -121,17 +125,21 @@ published automatically; every import must be reviewed and explicitly applied.
 
 1. Open a restaurant's menus and choose **Scan a menu**.
 2. Select a draft menu and upload up to 10 JPEG/PNG/WebP pages (8 MB each).
+   The browser uploads each page directly to the private bucket using
+   short-lived presigned URLs, so scan pages do not pass through a Server
+   Action body limit.
 3. Process the scan. Extraction stages items with confidence, duplicate, and
    change flags; page images remain private and are previewed through
-   authorized, short-lived signed URLs.
+   authorized, short-lived signed URLs. A stalled import can be retried after
+   15 minutes, up to 3 processing attempts.
 4. Accept, reject, or edit each staged item, then apply accepted items to the
    draft. Omitted scan items never delete existing menu items, and unpriced
    accepted items block application.
 5. Review the draft and publish it through the normal versioned publish flow.
 
-Scan uploads use a Server Action body limit of 85 MB (configured in
-`next.config.ts`). If your hosting platform enforces a smaller request body
-limit, upload fewer or smaller pages per scan.
+Restaurant and menu image Server Actions use a body limit of 8 MB (configured
+in `next.config.ts`). If your hosting platform enforces a smaller request body
+limit, upload smaller images.
 
 ## Administrator bootstrap
 
@@ -174,7 +182,8 @@ publishes the revision. Price changes are recorded in the change log.
 
 The app is Vercel-compatible and requires Node.js runtime for database, Argon2,
 sharp, and extraction work. Configure all environment variables in the hosting
-provider, run migrations against the production database from a trusted
+provider, set `TRUST_PROXY=vercel` on Vercel (or `proxy` behind your own trusted
+reverse proxy), run migrations against the production database from a trusted
 environment, then build and deploy. Do not deploy using test credentials.
 
 No deployment is performed automatically by this repository.

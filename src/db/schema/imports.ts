@@ -65,6 +65,15 @@ export const menuImports = pgTable(
     status: importStatusEnum("status").notNull().default("uploaded"),
     extractionProvider: text("extraction_provider"),
     errorDetails: jsonb("error_details").$type<Record<string, unknown>>(),
+    processingToken: uuid("processing_token"),
+    processingStartedAt: timestamp("processing_started_at", {
+      withTimezone: true,
+    }),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+    uploadCompletedAt: timestamp("upload_completed_at", {
+      withTimezone: true,
+    }),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     appliedAt: timestamp("applied_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })

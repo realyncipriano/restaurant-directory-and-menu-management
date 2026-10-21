@@ -1,9 +1,12 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, type FormEvent } from "react";
 
-import { createImportAction } from "@/app/dashboard/restaurants/[id]/imports/actions";
-import { EMPTY_FORM_STATE } from "@/lib/action-state";
+import {
+  beginImportAction,
+  confirmImportAction,
+} from "@/app/dashboard/restaurants/[id]/imports/actions";
 
 export function StartImportForm({
   restaurantId,
@@ -16,12 +19,79 @@ export function StartImportForm({
   storageConfigured: boolean;
   maxPages: number;
 }) {
-  const [state, formAction, pending] = useActionState(
-    createImportAction,
-    EMPTY_FORM_STATE,
-  );
+  const router = useRouter();
   const [fileCount, setFileCount] = useState(0);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const tooMany = fileCount > maxPages;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const menuId = String(formData.get("menuId") ?? "");
+    const files = formData
+      .getAll("pages")
+      .filter((file): file is File => file instanceof File);
+
+    if (!menuId) {
+      setError("Choose a draft menu first.");
+      return;
+    }
+    if (files.length === 0) {
+      setError("Choose at least one menu image to scan.");
+      return;
+    }
+
+    setPending(true);
+    setError(null);
+    try {
+      const begin = await beginImportAction({
+        restaurantId,
+        menuId,
+        files: files.map((file) => ({
+          name: file.name,
+          size: file.size,
+          type: file.type,
+        })),
+      });
+      if (begin.error || !begin.result) {
+        setError(begin.error ?? "The upload could not start.");
+        return;
+      }
+
+      for (const upload of begin.result.uploads) {
+        const file = files[upload.pageNumber - 1];
+        if (!file) throw new Error("A selected page is missing.");
+        const response = await fetch(upload.url, {
+          method: "PUT",
+          headers: { "Content-Type": upload.contentType },
+          body: file,
+        });
+        if (!response.ok) {
+          throw new Error("A scan page could not be uploaded.");
+        }
+      }
+
+      const confirmed = await confirmImportAction({
+        restaurantId,
+        importId: begin.result.importId,
+      });
+      if (confirmed.error) {
+        setError(confirmed.error);
+        return;
+      }
+
+      router.push(
+        `/dashboard/restaurants/${restaurantId}/imports/${begin.result.importId}`,
+      );
+    } catch {
+      setError(
+        "The scan pages could not be uploaded. Check storage CORS settings and try again.",
+      );
+    } finally {
+      setPending(false);
+    }
+  }
 
   if (menuOptions.length === 0) {
     return (
@@ -33,7 +103,7 @@ export function StartImportForm({
   }
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <input type="hidden" name="restaurantId" value={restaurantId} />
       <label className="block text-sm font-medium text-zinc-800">
         Apply scan to draft menu
@@ -84,12 +154,12 @@ export function StartImportForm({
           configured.
         </p>
       ) : null}
-      {state.error ? (
+      {error ? (
         <p
           role="alert"
           className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
         >
-          {state.error}
+          {error}
         </p>
       ) : null}
 

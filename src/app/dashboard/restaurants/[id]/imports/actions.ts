@@ -16,9 +16,12 @@ import {
 import {
   acceptAllImportItems,
   applyMenuImport,
-  createMenuImport,
+  beginMenuImport,
+  confirmMenuImport,
   processMenuImport,
   updateImportItem,
+  type BeginImportResult,
+  type ImportUploadFile,
 } from "@/server/services/imports";
 
 function messageFor(error: unknown): FormState {
@@ -53,31 +56,52 @@ function revalidateImportPaths(restaurantId: string, importId?: string): void {
   }
 }
 
-export async function createImportAction(
-  _prevState: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  const actorId = await currentUserId();
-  if (!actorId) redirect("/login");
-  const restaurantId = formString(formData, "restaurantId");
-  const menuId = formString(formData, "menuId");
-  const files = formData.getAll("pages");
+export type BeginImportActionResult = {
+  error?: string;
+  result?: BeginImportResult;
+};
 
-  let importId: string;
+export async function beginImportAction(input: {
+  restaurantId: string;
+  menuId: string;
+  files: ImportUploadFile[];
+}): Promise<BeginImportActionResult> {
+  const actorId = await currentUserId();
+  if (!actorId) {
+    return { error: "Your session has expired. Sign in again." };
+  }
+
   try {
-    importId = await createMenuImport(
+    const result = await beginMenuImport(
       getDb(),
       actorId,
-      restaurantId,
-      menuId,
-      files,
+      input.restaurantId,
+      input.menuId,
+      input.files,
     );
+    return { result };
+  } catch (error) {
+    return { error: messageFor(error).error ?? "The upload could not start." };
+  }
+}
+
+export async function confirmImportAction(input: {
+  restaurantId: string;
+  importId: string;
+}): Promise<FormState> {
+  const actorId = await currentUserId();
+  if (!actorId) {
+    return { error: "Your session has expired. Sign in again." };
+  }
+
+  try {
+    await confirmMenuImport(getDb(), actorId, input.importId);
   } catch (error) {
     return messageFor(error);
   }
 
-  revalidateImportPaths(restaurantId, importId);
-  redirect(`/dashboard/restaurants/${restaurantId}/imports/${importId}`);
+  revalidateImportPaths(input.restaurantId, input.importId);
+  return { success: "Scan pages uploaded." };
 }
 
 export async function processImportAction(

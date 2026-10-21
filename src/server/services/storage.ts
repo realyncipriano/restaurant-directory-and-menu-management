@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -43,6 +44,25 @@ export function isStorageConfigured(): boolean {
 
 export function isPublicStorageConfigured(): boolean {
   return Boolean(getR2Config()?.publicBaseUrl);
+}
+
+function privateBucketName(config: {
+  bucket: string;
+  privateBucket: string | null;
+}): string {
+  if (config.privateBucket) return config.privateBucket;
+  if (process.env.NODE_ENV === "production") {
+    throw new ConflictError(
+      "Private scan storage is not configured. Set R2_PRIVATE_BUCKET.",
+    );
+  }
+  return config.bucket;
+}
+
+export function isPrivateStorageConfigured(): boolean {
+  const config = getR2Config();
+  if (!config) return false;
+  return Boolean(config.privateBucket) || process.env.NODE_ENV !== "production";
 }
 
 export function buildObjectKey(prefix: string, extension: string): string {
@@ -139,5 +159,126 @@ export async function getSignedObjectUrl(
       Key: objectKey,
     }),
     { expiresIn: Math.min(Math.max(expiresInSeconds, 30), 3600) },
+  );
+}
+
+export async function putPrivateObject(
+  key: string,
+  body: Buffer,
+  contentType: string,
+  cacheControl = "private, no-store",
+): Promise<void> {
+  const config = getR2Config();
+  if (!config) {
+    throw new ConflictError("Object storage is not configured.");
+  }
+
+  await getClient().send(
+    new PutObjectCommand({
+      Bucket: privateBucketName(config),
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+      CacheControl: cacheControl,
+    }),
+  );
+}
+
+export async function readPrivateObject(objectKey: string): Promise<Buffer> {
+  const config = getR2Config();
+  if (!config) {
+    throw new ConflictError("Object storage is not configured.");
+  }
+
+  const response = await getClient().send(
+    new GetObjectCommand({
+      Bucket: privateBucketName(config),
+      Key: objectKey,
+    }),
+  );
+  if (!response.Body) {
+    throw new ConflictError("The stored file could not be read.");
+  }
+  const bytes = await response.Body.transformToByteArray();
+  return Buffer.from(bytes);
+}
+
+export async function deletePrivateObject(
+  objectKey: string | null | undefined,
+): Promise<void> {
+  if (!objectKey) return;
+  const config = getR2Config();
+  if (!config) return;
+
+  try {
+    await getClient().send(
+      new DeleteObjectCommand({
+        Bucket: privateBucketName(config),
+        Key: objectKey,
+      }),
+    );
+  } catch (error) {
+    console.error("[r2] Failed to delete a private object.", error);
+  }
+}
+
+export async function headPrivateObject(objectKey: string): Promise<{
+  contentLength: number | null;
+  contentType: string | null;
+}> {
+  const config = getR2Config();
+  if (!config) {
+    throw new ConflictError("Object storage is not configured.");
+  }
+
+  const response = await getClient().send(
+    new HeadObjectCommand({
+      Bucket: privateBucketName(config),
+      Key: objectKey,
+    }),
+  );
+  return {
+    contentLength: response.ContentLength ?? null,
+    contentType: response.ContentType ?? null,
+  };
+}
+
+export async function getSignedPrivateObjectUrl(
+  objectKey: string,
+  expiresInSeconds = 300,
+): Promise<string> {
+  const config = getR2Config();
+  if (!config) {
+    throw new ConflictError("Object storage is not configured.");
+  }
+
+  return getSignedUrl(
+    getClient(),
+    new GetObjectCommand({
+      Bucket: privateBucketName(config),
+      Key: objectKey,
+    }),
+    { expiresIn: Math.min(Math.max(expiresInSeconds, 30), 3600) },
+  );
+}
+
+export async function getSignedPrivatePutUrl(
+  objectKey: string,
+  contentType: string,
+  expiresInSeconds = 600,
+): Promise<string> {
+  const config = getR2Config();
+  if (!config) {
+    throw new ConflictError("Object storage is not configured.");
+  }
+
+  return getSignedUrl(
+    getClient(),
+    new PutObjectCommand({
+      Bucket: privateBucketName(config),
+      Key: objectKey,
+      ContentType: contentType,
+    }),
+    { expiresIn: Math.min(Math.max(expiresInSeconds, 60), 3600) },
   );
 }

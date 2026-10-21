@@ -5,6 +5,7 @@ export type R2Config = {
   accessKeyId: string;
   secretAccessKey: string;
   bucket: string;
+  privateBucket: string | null;
   publicBaseUrl: string | null;
   endpoint: string;
 };
@@ -129,12 +130,14 @@ export function getR2Config(): R2Config | null {
     clean(process.env.R2_ENDPOINT) ??
     `https://${accountId}.r2.cloudflarestorage.com`;
   const publicBaseUrl = clean(process.env.R2_PUBLIC_BASE_URL) ?? null;
+  const privateBucket = clean(process.env.R2_PRIVATE_BUCKET) ?? null;
 
   return {
     accountId,
     accessKeyId,
     secretAccessKey,
     bucket,
+    privateBucket,
     publicBaseUrl: publicBaseUrl?.replace(/\/+$/, "") ?? null,
     endpoint,
   };

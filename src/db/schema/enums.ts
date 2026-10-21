@@ -30,6 +30,7 @@ export const availabilityStatusEnum = pgEnum("availability_status", [
 ]);
 
 export const importStatusEnum = pgEnum("import_status", [
+  "uploading",
   "uploaded",
   "processing",
   "needs_review",
