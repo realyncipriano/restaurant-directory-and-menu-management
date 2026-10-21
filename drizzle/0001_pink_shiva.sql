@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "menus_draft_lineage_unique" ON "menus" USING btree ("restaurant_id","lineage_id") WHERE "menus"."status" = 'draft';
