@@ -32,6 +32,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    pool: "threads",
     fileParallelism: false,
     setupFiles: ["./tests/setup.ts"],
     globalSetup: ["./tests/integration/global-setup.ts"],
