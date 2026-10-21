@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { DbClient } from "@/db/client";
+import type { DbExecutor } from "@/db/types";
 import { menus } from "@/db/schema";
 import {
   hasRestaurantPermission,
@@ -83,4 +84,38 @@ export async function requireDraftEditable(
   }
 
   return result;
+}
+
+export async function lockMenuRow(
+  tx: DbExecutor,
+  menuId: string,
+): Promise<MenuRecord> {
+  await tx.execute(
+    sql`select id from ${menus} where ${menus.id} = ${menuId} for update`,
+  );
+
+  const [menu] = await tx
+    .select()
+    .from(menus)
+    .where(eq(menus.id, menuId))
+    .limit(1);
+
+  if (!menu) {
+    throw new NotFoundError("Menu not found.");
+  }
+
+  return menu;
+}
+
+export async function lockDraftMenu(
+  tx: DbExecutor,
+  menuId: string,
+): Promise<MenuRecord> {
+  const menu = await lockMenuRow(tx, menuId);
+  if (menu.status !== "draft") {
+    throw new ConflictError(
+      "Published menus are read-only. Create a draft revision to make changes.",
+    );
+  }
+  return menu;
 }

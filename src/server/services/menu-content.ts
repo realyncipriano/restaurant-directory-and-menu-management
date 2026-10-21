@@ -20,7 +20,7 @@ import {
 } from "@/lib/validation/menu";
 import { parseOrThrow } from "@/lib/validation/parse";
 import { writeAuditLog } from "./audit";
-import { requireDraftEditable } from "./menu-access";
+import { lockDraftMenu, requireDraftEditable } from "./menu-access";
 import type {
   MenuCategoryRecord,
   MenuItemRecord,
@@ -135,6 +135,7 @@ export async function createCategory(
 
   try {
     return await db.transaction(async (tx) => {
+      await lockDraftMenu(tx, menuId);
       const [category] = await tx
         .insert(menuCategories)
         .values({
@@ -188,6 +189,7 @@ export async function updateCategory(
 
   try {
     return await db.transaction(async (tx) => {
+      await lockDraftMenu(tx, menuId);
       await requireCategory(tx, menuId, categoryId);
 
       const [updated] = await tx
@@ -235,6 +237,7 @@ export async function deleteCategory(
   const actor: Actor = { id: access.actor.id, email: access.actor.email };
 
   await db.transaction(async (tx) => {
+    await lockDraftMenu(tx, menuId);
     const category = await requireCategory(tx, menuId, categoryId);
     const [row] = await tx
       .select({ total: count() })
@@ -269,6 +272,7 @@ export async function createMenuItem(
   const actor: Actor = { id: access.actor.id, email: access.actor.email };
 
   return db.transaction(async (tx) => {
+    await lockDraftMenu(tx, menuId);
     await requireCategory(tx, menuId, parsed.categoryId);
 
     const [item] = await tx
@@ -319,6 +323,7 @@ export async function updateMenuItem(
   const actor: Actor = { id: access.actor.id, email: access.actor.email };
 
   return db.transaction(async (tx) => {
+    await lockDraftMenu(tx, menuId);
     const existing = await requireItem(tx, menuId, itemId);
     await requireCategory(tx, menuId, parsed.categoryId);
 
@@ -384,6 +389,7 @@ export async function deleteMenuItem(
   const actor: Actor = { id: access.actor.id, email: access.actor.email };
 
   await db.transaction(async (tx) => {
+    await lockDraftMenu(tx, menuId);
     const existing = await requireItem(tx, menuId, itemId);
     await tx.delete(menuItems).where(eq(menuItems.id, itemId));
     await touchMenu(tx, menuId, now);

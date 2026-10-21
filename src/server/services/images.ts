@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne, or } from "drizzle-orm";
 import { fileTypeFromBuffer } from "file-type";
 import sharp from "sharp";
 
@@ -16,7 +16,7 @@ import {
   ValidationError,
 } from "@/lib/errors";
 import { writeAuditLog } from "./audit";
-import { requireDraftEditable } from "./menu-access";
+import { lockDraftMenu, requireDraftEditable } from "./menu-access";
 import { requireRestaurantPermission } from "./restaurant-access";
 import {
   buildObjectKey,
@@ -70,7 +70,11 @@ export async function prepareImage(
   }
 
   try {
-    const image = sharp(input, { failOn: "error" }).rotate();
+    const image = sharp(input, {
+      failOn: "error",
+      limitInputPixels: 40_000_000,
+      sequentialRead: true,
+    }).rotate();
     const output = await image
       .resize({
         width: 1600,
@@ -110,6 +114,46 @@ async function putImage(
 export async function deleteImageObject(
   objectKey: string | null | undefined,
 ): Promise<void> {
+  await deleteObject(objectKey);
+}
+
+async function isImageObjectReferenced(
+  db: DbClient,
+  objectKey: string,
+  exceptItemId?: string,
+): Promise<boolean> {
+  const [itemReference] = await db
+    .select({ id: menuItems.id })
+    .from(menuItems)
+    .where(
+      and(
+        eq(menuItems.imageObjectKey, objectKey),
+        exceptItemId ? ne(menuItems.id, exceptItemId) : undefined,
+      ),
+    )
+    .limit(1);
+  if (itemReference) return true;
+
+  const [restaurantReference] = await db
+    .select({ id: restaurants.id })
+    .from(restaurants)
+    .where(
+      or(
+        eq(restaurants.logoObjectKey, objectKey),
+        eq(restaurants.coverObjectKey, objectKey),
+      ),
+    )
+    .limit(1);
+  return Boolean(restaurantReference);
+}
+
+export async function deleteImageObjectIfUnreferenced(
+  db: DbClient,
+  objectKey: string | null | undefined,
+  exceptItemId?: string,
+): Promise<void> {
+  if (!objectKey) return;
+  if (await isImageObjectReferenced(db, objectKey, exceptItemId)) return;
   await deleteObject(objectKey);
 }
 
@@ -246,6 +290,7 @@ export async function setMenuItemImage(
 
   try {
     await db.transaction(async (tx) => {
+      await lockDraftMenu(tx, menuId);
       await tx
         .update(menuItems)
         .set({ imageObjectKey: key, updatedAt: new Date() })
@@ -264,7 +309,7 @@ export async function setMenuItemImage(
     throw error;
   }
 
-  await deleteImageObject(row.item.imageObjectKey);
+  await deleteImageObjectIfUnreferenced(db, row.item.imageObjectKey, itemId);
   return key;
 }
 
@@ -288,6 +333,7 @@ export async function removeMenuItemImage(
   if (!row.item.imageObjectKey) return;
 
   await db.transaction(async (tx) => {
+    await lockDraftMenu(tx, menuId);
     await tx
       .update(menuItems)
       .set({ imageObjectKey: null, updatedAt: new Date() })
@@ -302,5 +348,5 @@ export async function removeMenuItemImage(
     });
   });
 
-  await deleteImageObject(row.item.imageObjectKey);
+  await deleteImageObjectIfUnreferenced(db, row.item.imageObjectKey, itemId);
 }

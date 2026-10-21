@@ -37,6 +37,8 @@ import {
 } from "./menu-tree";
 import {
   getMenuAccess,
+  lockDraftMenu,
+  lockMenuRow,
   requireDraftEditable,
   requireMenuPermission,
 } from "./menu-access";
@@ -308,53 +310,56 @@ export async function startEditingMenu(
 
   if (menu.status === "draft") return menu;
 
-  const [existingDraft] = await db
-    .select()
-    .from(menus)
-    .where(
-      and(
-        eq(menus.restaurantId, menu.restaurantId),
-        eq(menus.lineageId, menu.lineageId),
-        eq(menus.status, "draft"),
-      ),
-    )
-    .limit(1);
-
-  if (existingDraft) return existingDraft;
-
-  let source = menu;
-  if (menu.status === "archived") {
-    const [published] = await db
-      .select()
-      .from(menus)
-      .where(
-        and(
-          eq(menus.restaurantId, menu.restaurantId),
-          eq(menus.lineageId, menu.lineageId),
-          eq(menus.status, "published"),
-        ),
-      )
-      .limit(1);
-
-    if (!published) {
-      throw new ConflictError(
-        "This archived menu has no published version to edit.",
-      );
-    }
-    source = published;
-  }
-
   const now = new Date();
 
   try {
     return await db.transaction(async (tx) => {
+      const lockedSource = await lockMenuRow(tx, menu.id);
+
+      const [existingDraft] = await tx
+        .select()
+        .from(menus)
+        .where(
+          and(
+            eq(menus.restaurantId, lockedSource.restaurantId),
+            eq(menus.lineageId, lockedSource.lineageId),
+            eq(menus.status, "draft"),
+          ),
+        )
+        .limit(1);
+
+      if (existingDraft) return existingDraft;
+      if (lockedSource.status === "draft") return lockedSource;
+
+      let source = lockedSource;
+      if (lockedSource.status === "archived") {
+        const [published] = await tx
+          .select()
+          .from(menus)
+          .where(
+            and(
+              eq(menus.restaurantId, lockedSource.restaurantId),
+              eq(menus.lineageId, lockedSource.lineageId),
+              eq(menus.status, "published"),
+            ),
+          )
+          .limit(1);
+
+        if (!published) {
+          throw new ConflictError(
+            "This archived menu has no published version to edit.",
+          );
+        }
+        source = published;
+      }
+
       const [versionRow] = await tx
         .select({ version: max(menus.version) })
         .from(menus)
         .where(
           and(
-            eq(menus.restaurantId, menu.restaurantId),
-            eq(menus.lineageId, menu.lineageId),
+            eq(menus.restaurantId, lockedSource.restaurantId),
+            eq(menus.lineageId, lockedSource.lineageId),
           ),
         );
       const nextVersion = Number(versionRow?.version ?? 0) + 1;
@@ -505,6 +510,7 @@ export async function updateMenuSettings(
 
   try {
     return await db.transaction(async (tx) => {
+      await lockDraftMenu(tx, menu.id);
       const [updated] = await tx
         .update(menus)
         .set({
@@ -548,6 +554,7 @@ export async function discardDraft(
   const now = new Date();
 
   await db.transaction(async (tx) => {
+    await lockDraftMenu(tx, menu.id);
     await tx
       .update(menus)
       .set({ status: "archived", updatedAt: now })
@@ -646,63 +653,65 @@ export async function publishMenu(
     throw new ConflictError("Only draft menus can be published.");
   }
 
-  const tree = await loadMenuTree(db, menu.id);
-  if (!tree) throw new NotFoundError("Menu not found.");
-
-  if (tree.categories.length === 0) {
-    throw new ValidationError(
-      "Add at least one category before publishing this menu.",
-    );
-  }
-
-  const allItems = tree.categories.flatMap((category) => category.items);
-  if (allItems.length === 0) {
-    throw new ValidationError(
-      "Add at least one menu item before publishing.",
-    );
-  }
-
-  const unpriced = allItems.find(
-    (item) =>
-      item.basePriceMinor === null && item.variants.length === 0,
-  );
-  if (unpriced) {
-    throw new ValidationError(
-      `Add a price or a priced variant for “${unpriced.name}” before publishing.`,
-    );
-  }
-
-  const [slugConflict] = await db
-    .select({ id: menus.id })
-    .from(menus)
-    .where(
-      and(
-        eq(menus.restaurantId, menu.restaurantId),
-        eq(menus.slug, menu.slug),
-        eq(menus.status, "published"),
-        ne(menus.lineageId, menu.lineageId),
-      ),
-    )
-    .limit(1);
-
-  if (slugConflict) {
-    throw new ConflictError(
-      "Another published menu already uses this URL slug. Rename this menu first.",
-    );
-  }
-
   const now = new Date();
 
   return db.transaction(async (tx) => {
+    const current = await lockDraftMenu(tx, menu.id);
+
+    const tree = await loadMenuTree(tx, current.id);
+    if (!tree) throw new NotFoundError("Menu not found.");
+
+    if (tree.categories.length === 0) {
+      throw new ValidationError(
+        "Add at least one category before publishing this menu.",
+      );
+    }
+
+    const allItems = tree.categories.flatMap((category) => category.items);
+    if (allItems.length === 0) {
+      throw new ValidationError(
+        "Add at least one menu item before publishing.",
+      );
+    }
+
+    const unpriced = allItems.find(
+      (item) =>
+        item.basePriceMinor === null && item.variants.length === 0,
+    );
+    if (unpriced) {
+      throw new ValidationError(
+        `Add a price or a priced variant for “${unpriced.name}” before publishing.`,
+      );
+    }
+
+    const [slugConflict] = await tx
+      .select({ id: menus.id })
+      .from(menus)
+      .where(
+        and(
+          eq(menus.restaurantId, current.restaurantId),
+          eq(menus.slug, current.slug),
+          eq(menus.status, "published"),
+          ne(menus.lineageId, current.lineageId),
+        ),
+      )
+      .limit(1);
+
+    if (slugConflict) {
+      throw new ConflictError(
+        "Another published menu already uses this URL slug. Rename this menu first.",
+      );
+    }
+
     const [previous] = await tx
       .select()
       .from(menus)
       .where(
         and(
-          eq(menus.restaurantId, menu.restaurantId),
-          eq(menus.lineageId, menu.lineageId),
+          eq(menus.restaurantId, current.restaurantId),
+          eq(menus.lineageId, current.lineageId),
           eq(menus.status, "published"),
-          ne(menus.id, menu.id),
+          ne(menus.id, current.id),
         ),
       )
       .limit(1);
