@@ -69,5 +69,11 @@ describe("permission helpers", () => {
     expect(safeRedirectPath("//evil.example")).toBe("/dashboard");
     expect(safeRedirectPath("/login?next=/dashboard")).toBe("/dashboard");
     expect(safeRedirectPath(undefined)).toBe("/dashboard");
+    expect(safeRedirectPath("/\\evil.example")).toBe("/dashboard");
+    expect(safeRedirectPath("/%5Cevil.example")).toBe("/dashboard");
+    expect(safeRedirectPath("\\\\evil.example")).toBe("/dashboard");
+    expect(safeRedirectPath("/dashboard?tab=menus")).toBe(
+      "/dashboard?tab=menus",
+    );
   });
 });

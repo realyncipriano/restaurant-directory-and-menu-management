@@ -19,9 +19,29 @@ export function formString(formData: FormData, key: string): string {
 
 export function safeRedirectPath(value: string | null | undefined): string {
   if (!value) return "/dashboard";
-  if (!value.startsWith("/") || value.startsWith("//")) return "/dashboard";
-  if (value.startsWith("/login") || value.startsWith("/activate")) {
+  if (/[\u0000-\u001f\u007f\\]/.test(value)) return "/dashboard";
+
+  try {
+    const base = "https://app.invalid";
+    const url = new URL(value, base);
+    if (url.origin !== base) return "/dashboard";
+    if (!url.pathname.startsWith("/") || url.pathname.startsWith("//")) {
+      return "/dashboard";
+    }
+
+    const decodedPath = decodeURIComponent(url.pathname);
+    if (decodedPath.includes("\\")) return "/dashboard";
+    if (
+      decodedPath === "/login" ||
+      decodedPath.startsWith("/login/") ||
+      decodedPath === "/activate" ||
+      decodedPath.startsWith("/activate/")
+    ) {
+      return "/dashboard";
+    }
+
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
     return "/dashboard";
   }
-  return value;
 }

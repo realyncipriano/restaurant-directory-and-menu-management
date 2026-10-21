@@ -27,22 +27,27 @@ export type PublicRestaurantCard = {
 
 export type PublicMenuCard = MenuRecord & { itemCount: number };
 
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
 export async function listPublicRestaurants(
   db: DbClient,
   filters: { search?: string; cuisine?: string } = {},
 ): Promise<PublicRestaurantCard[]> {
-  const search = filters.search?.trim();
-  const cuisine = filters.cuisine?.trim();
+  const search = filters.search?.trim().slice(0, 100);
+  const cuisine = filters.cuisine?.trim().slice(0, 80);
+  const searchPattern = search ? `%${escapeLikePattern(search)}%` : undefined;
 
   const where = and(
     eq(restaurants.status, "active"),
     cuisine ? eq(restaurants.cuisineType, cuisine) : undefined,
-    search
+    searchPattern
       ? or(
-          ilike(restaurants.name, `%${search}%`),
-          ilike(restaurants.cuisineType, `%${search}%`),
-          ilike(restaurants.location, `%${search}%`),
-          ilike(restaurants.description, `%${search}%`),
+          ilike(restaurants.name, searchPattern),
+          ilike(restaurants.cuisineType, searchPattern),
+          ilike(restaurants.location, searchPattern),
+          ilike(restaurants.description, searchPattern),
         )
       : undefined,
   );

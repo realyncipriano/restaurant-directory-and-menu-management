@@ -11,6 +11,10 @@ import {
 import {
   ACTIVATION_IP_LIMIT,
   ACTIVATION_WINDOW_SECONDS,
+  CHANGE_PASSWORD_LIMIT,
+  CHANGE_PASSWORD_WINDOW_SECONDS,
+  LOGIN_ACCOUNT_GLOBAL_LIMIT,
+  LOGIN_ACCOUNT_GLOBAL_WINDOW_SECONDS,
   LOGIN_ACCOUNT_LIMIT,
   LOGIN_IP_LIMIT,
   LOGIN_WINDOW_SECONDS,
@@ -230,7 +234,10 @@ export async function loginWithPassword(
     password: input.password,
   });
 
-  const accountKey = `login-account:${hashIdentifier(parsed.email)}:${input.ipHash ?? "unknown"}`;
+  const emailHash = hashIdentifier(parsed.email);
+  const accountKey = input.ipHash
+    ? `login-account:${emailHash}:${input.ipHash}`
+    : `login-account:${emailHash}`;
   const accountLimit = await consumeRateLimit(db, {
     key: accountKey,
     limit: LOGIN_ACCOUNT_LIMIT,
@@ -239,6 +246,16 @@ export async function loginWithPassword(
   });
   if (!accountLimit.allowed) {
     throw new RateLimitedError(accountLimit.retryAfterSeconds);
+  }
+
+  const globalAccountLimit = await consumeRateLimit(db, {
+    key: `login-account-global:${emailHash}`,
+    limit: LOGIN_ACCOUNT_GLOBAL_LIMIT,
+    windowSeconds: LOGIN_ACCOUNT_GLOBAL_WINDOW_SECONDS,
+    now,
+  });
+  if (!globalAccountLimit.allowed) {
+    throw new RateLimitedError(globalAccountLimit.retryAfterSeconds);
   }
 
   if (input.ipHash) {
@@ -478,6 +495,17 @@ export async function changePassword(
   const parsed = parseOrThrow(changePasswordSchema, input);
   assertStrongPassword(parsed.password);
 
+  const changePasswordKey = `change-password:${actor.id}:${input.ipHash ?? "unknown"}`;
+  const changePasswordLimit = await consumeRateLimit(db, {
+    key: changePasswordKey,
+    limit: CHANGE_PASSWORD_LIMIT,
+    windowSeconds: CHANGE_PASSWORD_WINDOW_SECONDS,
+    now,
+  });
+  if (!changePasswordLimit.allowed) {
+    throw new RateLimitedError(changePasswordLimit.retryAfterSeconds);
+  }
+
   const valid = await verifyPassword(actor.passwordHash, parsed.currentPassword);
   if (!valid) {
     throw new ValidationError("Current password is incorrect.", {
@@ -497,7 +525,7 @@ export async function changePassword(
     userAgent: input.userAgent,
   };
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [updated] = await tx
       .update(users)
       .set({ passwordHash, updatedAt: now })
@@ -509,6 +537,7 @@ export async function changePassword(
     }
 
     await revokeAllUserSessions(tx, actor.id, now);
+    await invalidateUserTokens(tx, actor.id, now);
     const session = await createSession(tx, actor.id, sessionMeta, now);
 
     await writeAuditLog(tx, {
@@ -520,6 +549,9 @@ export async function changePassword(
 
     return { user: publicUser(updated), session };
   });
+
+  await resetRateLimit(db, changePasswordKey);
+  return result;
 }
 
 export async function createInvite(
@@ -545,19 +577,23 @@ export async function createInvite(
     .limit(1);
 
   if (existing) {
-    if (
-      existing.accountStatus !== "invited" ||
-      existing.role !== "authorized_user"
-    ) {
+    const canRenewInvite =
+      existing.role === "authorized_user" &&
+      (existing.accountStatus === "invited" ||
+        (existing.accountStatus === "deactivated" && !existing.passwordHash));
+    if (!canRenewInvite) {
       throw new ConflictError("An account with that email already exists.");
     }
 
-    if (parsed.name) {
-      await db
-        .update(users)
-        .set({ name: parsed.name, updatedAt: now })
-        .where(eq(users.id, existing.id));
-    }
+    const [renewed] = await db
+      .update(users)
+      .set({
+        name: parsed.name ?? existing.name,
+        accountStatus: "invited",
+        updatedAt: now,
+      })
+      .where(eq(users.id, existing.id))
+      .returning();
 
     await invalidateUserTokens(db, existing.id, now);
     const token = await issueToken(db, {
@@ -579,7 +615,7 @@ export async function createInvite(
     return {
       token,
       url: activationUrl(token),
-      user: publicUser(existing),
+      user: publicUser(renewed ?? existing),
     };
   }
 
@@ -687,36 +723,52 @@ export async function deactivateUser(
     throw new ConflictError("You cannot deactivate your own account.");
   }
 
-  const [target] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, input.userId))
-    .limit(1);
-
-  if (!target) {
-    throw new NotFoundError("User not found.");
-  }
-  if (target.accountStatus === "deactivated") {
-    return;
-  }
-
-  if (target.role === "admin") {
-    const [row] = await db
-      .select({ total: count() })
-      .from(users)
-      .where(
-        and(eq(users.role, "admin"), eq(users.accountStatus, "active")),
-      );
-    if ((row?.total ?? 0) <= 1) {
-      throw new ConflictError("At least one active administrator is required.");
-    }
-  }
-
   await db.transaction(async (tx) => {
-    await tx
+    const [target] = await tx
+      .select()
+      .from(users)
+      .where(eq(users.id, input.userId))
+      .for("update")
+      .limit(1);
+
+    if (!target) {
+      throw new NotFoundError("User not found.");
+    }
+    if (target.accountStatus === "deactivated") {
+      return;
+    }
+
+    if (target.role === "admin") {
+      await tx.execute(
+        sql`select id from ${users} where ${users.role} = 'admin' and ${users.accountStatus} = 'active' for update`,
+      );
+      const [row] = await tx
+        .select({ total: count() })
+        .from(users)
+        .where(
+          and(eq(users.role, "admin"), eq(users.accountStatus, "active")),
+        );
+      if ((row?.total ?? 0) <= 1) {
+        throw new ConflictError(
+          "At least one active administrator is required.",
+        );
+      }
+    }
+
+    const [updated] = await tx
       .update(users)
       .set({ accountStatus: "deactivated", updatedAt: now })
-      .where(eq(users.id, target.id));
+      .where(
+        and(
+          eq(users.id, target.id),
+          inArray(users.accountStatus, ["active", "invited"]),
+        ),
+      )
+      .returning({ id: users.id });
+    if (!updated) {
+      throw new ConflictError("This account is no longer active.");
+    }
+
     await revokeAllUserSessions(tx, target.id, now);
     await invalidateUserTokens(tx, target.id, now);
     await writeAuditLog(tx, {

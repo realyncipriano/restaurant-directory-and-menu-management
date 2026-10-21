@@ -2,9 +2,10 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { DbClient } from "@/db/client";
-import { authTokens, sessions, users } from "@/db/schema";
+import { authTokens, rateLimits, sessions, users } from "@/db/schema";
 import type { EphemeralDb } from "./ephemeral-db";
 import { getSessionUserByToken } from "@/lib/auth/session";
+import { hashIdentifier } from "@/lib/auth/tokens";
 import {
   ConflictError,
   ForbiddenError,
@@ -225,6 +226,83 @@ describe("authentication services (ephemeral PGlite)", () => {
     expect(second.token).not.toBe(first.token);
     expect(await getActivationContext(db, first.token, NOW)).toBeNull();
     expect(await getActivationContext(db, second.token, NOW)).not.toBeNull();
+  });
+
+  it("re-invites a deactivated user who never set a password", async () => {
+    const admin = await seedUser(db, {
+      email: "admin@example.com",
+      role: "admin",
+    });
+
+    const first = await createInvite(db, {
+      actorId: admin.id,
+      email: "cancelled@example.com",
+      now: NOW,
+    });
+    await deactivateUser(db, {
+      actorId: admin.id,
+      userId: first.user.id,
+      now: NOW,
+    });
+
+    const renewed = await createInvite(db, {
+      actorId: admin.id,
+      email: "cancelled@example.com",
+      name: "Returning Member",
+      now: NOW,
+    });
+
+    expect(renewed.user.id).toBe(first.user.id);
+    expect(renewed.user.accountStatus).toBe("invited");
+    expect(renewed.user.name).toBe("Returning Member");
+    expect(await getActivationContext(db, first.token, NOW)).toBeNull();
+    expect(await getActivationContext(db, renewed.token, NOW)).not.toBeNull();
+  });
+
+  it("applies a global per-account login limit independent of IP", async () => {
+    await seedUser(db, { email: "global@example.com" });
+    const emailHash = hashIdentifier("global@example.com");
+    const windowEndsAt = new Date(NOW.getTime() + 60 * 60 * 1000);
+
+    await db.insert(rateLimits).values({
+      key: `login-account-global:${emailHash}`,
+      count: 50,
+      windowEndsAt,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+
+    await expect(
+      loginWithPassword(db, {
+        email: "global@example.com",
+        password: TEST_PASSWORD,
+        ipHash: "fresh-ip",
+        now: NOW,
+      }),
+    ).rejects.toBeInstanceOf(RateLimitedError);
+  });
+
+  it("invalidates outstanding reset tokens when a password changes", async () => {
+    const admin = await seedUser(db, {
+      email: "admin@example.com",
+      role: "admin",
+    });
+    const member = await seedUser(db, { email: "member@example.com" });
+    const reset = await createPasswordResetLink(db, {
+      actorId: admin.id,
+      userId: member.id,
+      now: NOW,
+    });
+
+    await changePassword(db, {
+      actorId: member.id,
+      currentPassword: TEST_PASSWORD,
+      password: NEW_PASSWORD,
+      confirmPassword: NEW_PASSWORD,
+      now: NOW,
+    });
+
+    expect(await getActivationContext(db, reset.token, NOW)).toBeNull();
   });
 
   it("resets a password, revokes existing sessions, and issues a new session", async () => {

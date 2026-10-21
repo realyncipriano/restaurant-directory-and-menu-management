@@ -92,6 +92,10 @@ export async function pruneExpiredRateLimits(
 
 export const LOGIN_WINDOW_SECONDS = 15 * 60;
 export const LOGIN_ACCOUNT_LIMIT = 10;
+export const LOGIN_ACCOUNT_GLOBAL_WINDOW_SECONDS = 60 * 60;
+export const LOGIN_ACCOUNT_GLOBAL_LIMIT = 50;
 export const LOGIN_IP_LIMIT = 30;
+export const CHANGE_PASSWORD_WINDOW_SECONDS = 15 * 60;
+export const CHANGE_PASSWORD_LIMIT = 5;
 export const ACTIVATION_WINDOW_SECONDS = 60 * 60;
 export const ACTIVATION_IP_LIMIT = 10;
