@@ -1,8 +1,15 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { updateImportItemAction } from "@/app/dashboard/restaurants/[id]/imports/actions";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Notice } from "@/components/ui/notice";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { EMPTY_FORM_STATE } from "@/lib/action-state";
 import { formatMinorForInput, formatPrice } from "@/lib/money";
 
@@ -49,10 +56,15 @@ export function ImportItemReviewForm({
     updateImportItemAction,
     EMPTY_FORM_STATE,
   );
+  const [intent, setIntent] = useState<"save" | "accept" | "reject" | null>(
+    null,
+  );
+  const decided = item.decision !== "pending";
+  const lowConfidence = (item.confidence ?? 0) < 70;
 
   const decisionStyles =
     item.decision === "accept"
-      ? "border-emerald-300 bg-emerald-50/60"
+      ? "border-emerald-300 bg-emerald-50/50"
       : item.decision === "reject"
         ? "border-zinc-200 bg-zinc-50 opacity-70"
         : "border-zinc-200 bg-white";
@@ -60,89 +72,130 @@ export function ImportItemReviewForm({
   return (
     <form
       action={formAction}
-      className={`rounded-xl border p-4 ${decisionStyles}`}
+      className={`rounded-2xl border p-4 shadow-sm transition ${decisionStyles}`}
+      aria-busy={pending}
     >
       <input type="hidden" name="restaurantId" value={restaurantId} />
       <input type="hidden" name="importId" value={importId} />
       <input type="hidden" name="itemId" value={item.id} />
 
       <div className="flex flex-wrap items-center gap-2 text-[11px]">
-        <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-600">
+        <Badge tone="neutral">
           {changeLabels[item.changeType] ?? item.changeType}
-        </span>
-        <span
-          className={
-            (item.confidence ?? 0) < 70
-              ? "rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700"
-              : "rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700"
-          }
-        >
+        </Badge>
+        <Badge tone={lowConfidence ? "danger" : "success"}>
           {item.confidence ?? "?"}% confidence
-        </span>
+        </Badge>
         {item.pageNumber ? (
           <span className="text-zinc-400">Page {item.pageNumber}</span>
         ) : null}
         {item.duplicateName ? (
-          <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-800">
+          <Badge tone="warning">
             Possible duplicate of “{item.duplicateName}”
-          </span>
+          </Badge>
         ) : null}
-        <span className="ml-auto font-medium capitalize text-zinc-500">
+        <Badge
+          tone={
+            item.decision === "accept"
+              ? "success"
+              : item.decision === "reject"
+                ? "neutral"
+                : "warning"
+          }
+          className="ml-auto"
+        >
           {item.decision}
-        </span>
+        </Badge>
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <label className="block text-xs font-medium text-zinc-700">
-          Category
-          <input
-            name="categoryName"
-            defaultValue={item.categoryName}
-            required
-            maxLength={120}
-            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
-          />
-        </label>
-        <label className="block text-xs font-medium text-zinc-700">
-          Item name
-          <input
-            name="name"
-            defaultValue={item.name}
-            required
-            maxLength={160}
-            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
-          />
-        </label>
-        <label className="block text-xs font-medium text-zinc-700 sm:col-span-2">
-          Description
-          <textarea
-            name="description"
-            defaultValue={item.description ?? ""}
-            rows={2}
-            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
-          />
-        </label>
-        <label className="block text-xs font-medium text-zinc-700">
-          Base price ({item.currency})
-          <input
-            name="basePrice"
-            defaultValue={formatMinorForInput(item.basePriceMinor)}
-            inputMode="decimal"
-            placeholder="e.g. 185.00"
-            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
-          />
-        </label>
-        <label className="block text-xs font-medium text-zinc-700">
-          Availability
-          <select
-            name="availabilityStatus"
-            defaultValue={item.availabilityStatus}
-            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
-          >
-            <option value="available">Available</option>
-            <option value="unavailable">Unavailable</option>
-          </select>
-        </label>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <Field
+          id={`review-category-${item.id}`}
+          label="Category"
+          note="Groups this item on the menu."
+          noteLayout="below"
+          required
+          error={state.fieldErrors?.categoryName?.[0]}
+        >
+          {(control) => (
+            <Input
+              {...control}
+              name="categoryName"
+              defaultValue={item.categoryName}
+              maxLength={120}
+            />
+          )}
+        </Field>
+        <Field
+          id={`review-name-${item.id}`}
+          label="Item name"
+          note="Shown to guests on the public menu."
+          noteLayout="below"
+          required
+          error={state.fieldErrors?.name?.[0]}
+        >
+          {(control) => (
+            <Input
+              {...control}
+              name="name"
+              defaultValue={item.name}
+              maxLength={160}
+            />
+          )}
+        </Field>
+        <Field
+          id={`review-description-${item.id}`}
+          label="Description"
+          note="Optional details from the scan. Edit anything that looks misread."
+          noteLayout="below"
+          optional
+          error={state.fieldErrors?.description?.[0]}
+          className="sm:col-span-2"
+        >
+          {(control) => (
+            <Textarea
+              {...control}
+              name="description"
+              defaultValue={item.description ?? ""}
+              rows={2}
+            />
+          )}
+        </Field>
+        <Field
+          id={`review-price-${item.id}`}
+          label={`Base price (${item.currency})`}
+          note="Leave blank when every serving has its own variant price."
+          noteLayout="below"
+          error={state.fieldErrors?.basePrice?.[0]}
+        >
+          {(control) => (
+            <Input
+              {...control}
+              name="basePrice"
+              defaultValue={formatMinorForInput(item.basePriceMinor)}
+              inputMode="decimal"
+              placeholder="e.g. 185.00"
+            />
+          )}
+        </Field>
+        <Field
+          id={`review-availability-${item.id}`}
+          label="Availability"
+          note="Unavailable items stay listed but are marked to guests."
+          noteLayout="below"
+          error={state.fieldErrors?.availabilityStatus?.[0]}
+        >
+          {(control) => (
+            <Select
+              {...control}
+              name="availabilityStatus"
+              defaultValue={item.availabilityStatus}
+            >
+              <option value="available">Available</option>
+              <option value="unavailable">Unavailable</option>
+            </Select>
+          )}
+        </Field>
       </div>
 
       {item.variants.length > 0 ? (
@@ -169,47 +222,56 @@ export function ImportItemReviewForm({
       ) : null}
 
       {state.error ? (
-        <p
-          role="alert"
-          className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
-        >
+        <Notice tone="error" className="mt-3">
           {state.error}
-        </p>
+        </Notice>
       ) : null}
       {state.success ? (
-        <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+        <Notice tone="success" className="mt-3">
           {state.success}
-        </p>
+        </Notice>
       ) : null}
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-100 pt-3">
+        <Button
           type="submit"
           name="decision"
           value="pending"
+          variant="outline"
+          size="sm"
+          isLoading={pending && (intent === "save" || intent === null)}
+          loadingLabel="Saving..."
+          onClick={() => setIntent("save")}
           disabled={pending}
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
         >
           Save edits
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
           name="decision"
           value="accept"
-          disabled={pending}
-          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+          variant="success"
+          size="sm"
+          isLoading={pending && intent === "accept"}
+          loadingLabel="Accepting..."
+          onClick={() => setIntent("accept")}
+          disabled={pending || decided}
         >
           Accept
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
           name="decision"
           value="reject"
-          disabled={pending}
-          className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+          variant="danger"
+          size="sm"
+          isLoading={pending && intent === "reject"}
+          loadingLabel="Rejecting..."
+          onClick={() => setIntent("reject")}
+          disabled={pending || decided}
         >
           Reject
-        </button>
+        </Button>
       </div>
     </form>
   );

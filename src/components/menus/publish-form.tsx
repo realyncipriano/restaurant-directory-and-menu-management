@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 
 import { publishMenuAction } from "@/app/dashboard/restaurants/[id]/menus/actions";
+import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { EMPTY_FORM_STATE } from "@/lib/action-state";
 
 export function PublishMenuForm({
@@ -29,25 +31,19 @@ export function PublishMenuForm({
           event.preventDefault();
         }
       }}
-      className="space-y-2"
+      className="space-y-3"
     >
       <input type="hidden" name="restaurantId" value={restaurantId} />
       <input type="hidden" name="menuId" value={menuId} />
-      {state.error ? (
-        <p
-          role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-        >
-          {state.error}
-        </p>
-      ) : null}
-      <button
+      {state.error ? <Notice tone="error">{state.error}</Notice> : null}
+      <Button
         type="submit"
-        disabled={pending}
-        className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+        variant="success"
+        isLoading={pending}
+        loadingLabel="Publishing..."
       >
-        {pending ? "Publishing..." : "Publish menu"}
-      </button>
+        Publish menu
+      </Button>
     </form>
   );
 }

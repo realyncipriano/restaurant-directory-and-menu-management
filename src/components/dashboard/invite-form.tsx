@@ -4,10 +4,11 @@ import { useActionState } from "react";
 
 import { createInviteAction } from "@/app/dashboard/users/actions";
 import { CopyButton } from "@/components/copy-button";
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Notice } from "@/components/ui/notice";
 import { EMPTY_INVITE_STATE } from "@/lib/action-state";
-
-const inputClass =
-  "mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20";
 
 export function InviteForm() {
   const [state, formAction, pending] = useActionState(
@@ -16,65 +17,55 @@ export function InviteForm() {
   );
 
   return (
-    <div className="space-y-4">
-      <form action={formAction} className="space-y-4">
-        {state.error ? (
-          <p
-            role="alert"
-            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-          >
-            {state.error}
-          </p>
-        ) : null}
+    <div className="space-y-5">
+      <form action={formAction} className="space-y-5">
+        {state.error ? <Notice tone="error">{state.error}</Notice> : null}
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label
-              htmlFor="invite-email"
-              className="block text-sm font-medium text-zinc-700"
-            >
-              Email
-            </label>
-            <input
-              id="invite-email"
+        <Field
+          id="invite-email"
+          label="Email"
+          note="The invitation is tied to this address. There is no public sign-up, so this must be the person's real work email."
+          required
+          error={state.fieldErrors?.email?.[0]}
+        >
+          {(control) => (
+            <Input
+              {...control}
               name="email"
               type="email"
-              required
               autoComplete="off"
-              className={inputClass}
               placeholder="member@restaurant.ph"
             />
-            {state.fieldErrors?.email ? (
-              <p className="mt-1 text-xs text-red-600">
-                {state.fieldErrors.email[0]}
-              </p>
-            ) : null}
-          </div>
-          <div>
-            <label
-              htmlFor="invite-name"
-              className="block text-sm font-medium text-zinc-700"
-            >
-              Name <span className="font-normal text-zinc-400">(optional)</span>
-            </label>
-            <input
-              id="invite-name"
+          )}
+        </Field>
+
+        <Field
+          id="invite-name"
+          label="Name"
+          note="Shown in the account list and audit history. You can leave it blank and let the member fill it in later."
+          optional
+        >
+          {(control) => (
+            <Input
+              {...control}
               name="name"
               type="text"
               autoComplete="off"
-              className={inputClass}
               placeholder="Maria Santos"
             />
-          </div>
-        </div>
+          )}
+        </Field>
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {pending ? "Creating invite..." : "Create invitation"}
-        </button>
+        <div className="border-t border-zinc-100 pt-5">
+          <Button
+            type="submit"
+            variant="secondary"
+            isLoading={pending}
+            loadingLabel="Creating invite..."
+          >
+            Create invitation
+          </Button>
+        </div>
       </form>
 
       {state.inviteUrl ? (
@@ -89,7 +80,7 @@ export function InviteForm() {
             </code>
             <CopyButton value={state.inviteUrl} />
           </div>
-          <p className="mt-2 text-xs text-emerald-800">
+          <p className="mt-2 text-xs leading-5 text-emerald-800">
             The link is single-use and expires in 7 days. It will only be shown
             once, so copy it now.
           </p>

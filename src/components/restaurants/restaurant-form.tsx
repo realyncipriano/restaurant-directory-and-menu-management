@@ -6,10 +6,12 @@ import {
   createRestaurantAction,
   updateRestaurantAction,
 } from "@/app/dashboard/restaurants/actions";
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Notice } from "@/components/ui/notice";
+import { Textarea } from "@/components/ui/textarea";
 import { EMPTY_FORM_STATE } from "@/lib/action-state";
-
-const inputClass =
-  "mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20";
 
 export type RestaurantFormValues = {
   id?: string;
@@ -24,9 +26,19 @@ export type RestaurantFormValues = {
   operatingHours?: string | null;
 };
 
-function FieldError({ message }: { message?: string[] }) {
-  if (!message?.length) return null;
-  return <p className="mt-1 text-xs text-red-600">{message[0]}</p>;
+function SectionHeading({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div>
+      <h2 className="text-sm font-semibold text-zinc-900">{title}</h2>
+      <p className="mt-1 text-xs leading-5 text-zinc-500">{description}</p>
+    </div>
+  );
 }
 
 export function RestaurantForm({
@@ -44,209 +56,210 @@ export function RestaurantForm({
   );
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} className="space-y-7">
       {values.id ? (
         <input type="hidden" name="restaurantId" value={values.id} />
       ) : null}
 
-      {state.error ? (
-        <p
-          role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+      {state.error ? <Notice tone="error">{state.error}</Notice> : null}
+
+      <section className="space-y-5">
+        <SectionHeading
+          title="Basic details"
+          description="The essentials visitors see in the directory and on the restaurant page."
+        />
+
+        <Field
+          id="name"
+          label="Restaurant name"
+          note="Shown as the title in the public directory and on every menu page."
+          required
+          error={state.fieldErrors?.name?.[0]}
         >
-          {state.error}
-        </p>
-      ) : null}
+          {(control) => (
+            <Input
+              {...control}
+              name="name"
+              type="text"
+              defaultValue={values.name ?? ""}
+              placeholder="Lola Maria's Kitchen"
+            />
+          )}
+        </Field>
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div className="sm:col-span-2">
-          <label htmlFor="name" className="block text-sm font-medium text-zinc-700">
-            Restaurant name
-          </label>
-          <input
-            id="name"
-            name="name"
-            type="text"
-            required
-            defaultValue={values.name ?? ""}
-            className={inputClass}
-            placeholder="Lola Maria's Kitchen"
-          />
-          <FieldError message={state.fieldErrors?.name} />
-        </div>
-
-        <div className="sm:col-span-2">
-          <label htmlFor="slug" className="block text-sm font-medium text-zinc-700">
-            URL slug
-          </label>
-          {canEditSlug ? (
-            <>
-              <input
-                id="slug"
+        <Field
+          id="slug"
+          label="URL slug"
+          note={
+            canEditSlug
+              ? "Lowercase letters, numbers, and hyphens. Leave blank to generate from the name. Changing it changes the public URL."
+              : "Only administrators can change the public URL."
+          }
+          error={state.fieldErrors?.slug?.[0]}
+        >
+          {(control) =>
+            canEditSlug ? (
+              <Input
+                {...control}
                 name="slug"
                 type="text"
                 defaultValue={values.slug ?? ""}
-                className={inputClass}
                 placeholder="lola-marias-kitchen"
                 pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
               />
-              <p className="mt-1 text-xs text-zinc-500">
-                Lowercase letters, numbers, and hyphens. Leave blank to generate
-                from the name. Changing it changes the public URL.
+            ) : (
+              <p
+                id={control.id}
+                className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 font-mono text-sm text-zinc-600"
+              >
+                /{values.slug}
               </p>
-              <FieldError message={state.fieldErrors?.slug} />
-            </>
-          ) : (
-            <>
-              <p className="mt-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 font-mono text-sm text-zinc-600">
-                {values.slug}
-              </p>
-              <p className="mt-1 text-xs text-zinc-500">
-                Only administrators can change the public URL.
-              </p>
-            </>
-          )}
-        </div>
+            )
+          }
+        </Field>
 
-        <div className="sm:col-span-2">
-          <label
-            htmlFor="description"
-            className="block text-sm font-medium text-zinc-700"
-          >
-            Description
-          </label>
-          <textarea
-            id="description"
-            name="description"
-            rows={4}
-            defaultValue={values.description ?? ""}
-            className={inputClass}
-            placeholder="A short introduction shown on the public restaurant page."
-          />
-          <FieldError message={state.fieldErrors?.description} />
-        </div>
-
-        <div>
-          <label
-            htmlFor="cuisineType"
-            className="block text-sm font-medium text-zinc-700"
-          >
-            Cuisine
-          </label>
-          <input
-            id="cuisineType"
-            name="cuisineType"
-            type="text"
-            defaultValue={values.cuisineType ?? ""}
-            className={inputClass}
-            placeholder="Filipino"
-          />
-          <FieldError message={state.fieldErrors?.cuisineType} />
-        </div>
-
-        <div>
-          <label
-            htmlFor="location"
-            className="block text-sm font-medium text-zinc-700"
-          >
-            Area or city
-          </label>
-          <input
-            id="location"
-            name="location"
-            type="text"
-            defaultValue={values.location ?? ""}
-            className={inputClass}
-            placeholder="Makati City"
-          />
-          <FieldError message={state.fieldErrors?.location} />
-        </div>
-
-        <div className="sm:col-span-2">
-          <label
-            htmlFor="address"
-            className="block text-sm font-medium text-zinc-700"
-          >
-            Address
-          </label>
-          <input
-            id="address"
-            name="address"
-            type="text"
-            defaultValue={values.address ?? ""}
-            className={inputClass}
-            placeholder="123 Ayala Avenue, Makati City"
-          />
-          <FieldError message={state.fieldErrors?.address} />
-        </div>
-
-        <div>
-          <label
-            htmlFor="contactPhone"
-            className="block text-sm font-medium text-zinc-700"
-          >
-            Contact phone
-          </label>
-          <input
-            id="contactPhone"
-            name="contactPhone"
-            type="tel"
-            defaultValue={values.contactPhone ?? ""}
-            className={inputClass}
-            placeholder="+63 2 8123 4567"
-          />
-          <FieldError message={state.fieldErrors?.contactPhone} />
-        </div>
-
-        <div>
-          <label
-            htmlFor="contactEmail"
-            className="block text-sm font-medium text-zinc-700"
-          >
-            Contact email
-          </label>
-          <input
-            id="contactEmail"
-            name="contactEmail"
-            type="email"
-            defaultValue={values.contactEmail ?? ""}
-            className={inputClass}
-            placeholder="hello@restaurant.ph"
-          />
-          <FieldError message={state.fieldErrors?.contactEmail} />
-        </div>
-
-        <div className="sm:col-span-2">
-          <label
-            htmlFor="operatingHours"
-            className="block text-sm font-medium text-zinc-700"
-          >
-            Operating hours
-          </label>
-          <textarea
-            id="operatingHours"
-            name="operatingHours"
-            rows={3}
-            defaultValue={values.operatingHours ?? ""}
-            className={inputClass}
-            placeholder={"Mon–Fri: 10:00 AM – 9:00 PM\nSat–Sun: 9:00 AM – 10:00 PM"}
-          />
-          <FieldError message={state.fieldErrors?.operatingHours} />
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3 border-t border-zinc-100 pt-5">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+        <Field
+          id="description"
+          label="Description"
+          note="A short introduction shown on the public restaurant page. Two or three sentences works best."
+          error={state.fieldErrors?.description?.[0]}
         >
-          {pending
-            ? "Saving..."
-            : mode === "create"
-              ? "Create restaurant"
-              : "Save changes"}
-        </button>
+          {(control) => (
+            <Textarea
+              {...control}
+              name="description"
+              rows={4}
+              defaultValue={values.description ?? ""}
+              placeholder="A short introduction shown on the public restaurant page."
+            />
+          )}
+        </Field>
+
+        <Field
+          id="cuisineType"
+          label="Cuisine"
+          note="Used for directory filters and shown as a label, e.g. Filipino, Italian, or Café."
+          error={state.fieldErrors?.cuisineType?.[0]}
+        >
+          {(control) => (
+            <Input
+              {...control}
+              name="cuisineType"
+              type="text"
+              defaultValue={values.cuisineType ?? ""}
+              placeholder="Filipino"
+            />
+          )}
+        </Field>
+      </section>
+
+      <div className="border-t border-zinc-100" />
+
+      <section className="space-y-5">
+        <SectionHeading
+          title="Location"
+          description="Help guests find the restaurant and understand which area it serves."
+        />
+
+        <Field
+          id="location"
+          label="Area or city"
+          note="A short label shown on listing cards, such as the city or neighbourhood."
+          error={state.fieldErrors?.location?.[0]}
+        >
+          {(control) => (
+            <Input
+              {...control}
+              name="location"
+              type="text"
+              defaultValue={values.location ?? ""}
+              placeholder="Makati City"
+            />
+          )}
+        </Field>
+
+        <Field
+          id="address"
+          label="Address"
+          note="Full street address shown on the public restaurant page."
+          error={state.fieldErrors?.address?.[0]}
+        >
+          {(control) => (
+            <Input
+              {...control}
+              name="address"
+              type="text"
+              defaultValue={values.address ?? ""}
+              placeholder="123 Ayala Avenue, Makati City"
+            />
+          )}
+        </Field>
+      </section>
+
+      <div className="border-t border-zinc-100" />
+
+      <section className="space-y-5">
+        <SectionHeading
+          title="Contact and hours"
+          description="Optional details visitors can use to reach the restaurant or plan a visit."
+        />
+
+        <Field
+          id="contactPhone"
+          label="Contact phone"
+          note="Shown publicly so guests can call ahead. Include the area code."
+          error={state.fieldErrors?.contactPhone?.[0]}
+        >
+          {(control) => (
+            <Input
+              {...control}
+              name="contactPhone"
+              type="tel"
+              defaultValue={values.contactPhone ?? ""}
+              placeholder="+63 2 8123 4567"
+            />
+          )}
+        </Field>
+
+        <Field
+          id="contactEmail"
+          label="Contact email"
+          note="Shown publicly for enquiries about this listing."
+          error={state.fieldErrors?.contactEmail?.[0]}
+        >
+          {(control) => (
+            <Input
+              {...control}
+              name="contactEmail"
+              type="email"
+              defaultValue={values.contactEmail ?? ""}
+              placeholder="hello@restaurant.ph"
+            />
+          )}
+        </Field>
+
+        <Field
+          id="operatingHours"
+          label="Operating hours"
+          note="Use one line per schedule. Example: Mon–Fri: 10:00 AM – 9:00 PM."
+          error={state.fieldErrors?.operatingHours?.[0]}
+        >
+          {(control) => (
+            <Textarea
+              {...control}
+              name="operatingHours"
+              rows={3}
+              defaultValue={values.operatingHours ?? ""}
+              placeholder={"Mon–Fri: 10:00 AM – 9:00 PM\nSat–Sun: 9:00 AM – 10:00 PM"}
+            />
+          )}
+        </Field>
+      </section>
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-5">
+        <Button type="submit" isLoading={pending} loadingLabel="Saving...">
+          {mode === "create" ? "Create restaurant" : "Save changes"}
+        </Button>
         <p className="text-xs text-zinc-500">
           Currency is fixed to Philippine pesos (PHP).
         </p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useRef, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import {
@@ -9,18 +9,16 @@ import {
   updateItemAction,
 } from "@/app/dashboard/restaurants/[id]/menus/actions";
 import { ConfirmButton } from "@/components/dashboard/confirm-button";
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Notice } from "@/components/ui/notice";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/action-state";
-
-const inputClass =
-  "mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20";
 
 type VariantRow = { name: string; price: string };
 type ModifierRow = { name: string; price: string; isAvailable: boolean };
-
-function FieldError({ message }: { message?: string[] }) {
-  if (!message?.length) return null;
-  return <p className="mt-1 text-xs text-red-600">{message[0]}</p>;
-}
 
 export type ItemFormValues = {
   id?: string;
@@ -33,6 +31,28 @@ export type ItemFormValues = {
   variants: VariantRow[];
   modifiers: ModifierRow[];
 };
+
+function SectionHint({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description: string;
+  action: ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-2">
+      <div>
+        <p className="text-xs font-semibold text-zinc-800">{title}</p>
+        <p className="mt-0.5 text-[11px] leading-4 text-zinc-500">
+          {description}
+        </p>
+      </div>
+      {action}
+    </div>
+  );
+}
 
 export function ItemForm({
   mode,
@@ -75,160 +95,165 @@ export function ItemForm({
   );
 
   const categoryId = values?.categoryId ?? defaultCategoryId ?? "";
+  const key = values?.id ?? "new";
 
   return (
     <div className="space-y-3">
-      <form ref={formRef} action={formAction} className="space-y-4">
+      <form ref={formRef} action={formAction} className="space-y-5">
         <input type="hidden" name="restaurantId" value={restaurantId} />
         <input type="hidden" name="menuId" value={menuId} />
         {values?.id ? <input type="hidden" name="itemId" value={values.id} /> : null}
         <input type="hidden" name="variants" value={JSON.stringify(variants)} />
         <input type="hidden" name="modifiers" value={JSON.stringify(modifiers)} />
 
-        {state.error ? (
-          <p
-            role="alert"
-            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-          >
-            {state.error}
-          </p>
-        ) : null}
-        {state.success ? (
-          <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-            {state.success}
-          </p>
-        ) : null}
+        {state.error ? <Notice tone="error">{state.error}</Notice> : null}
+        {state.success ? <Notice tone="success">{state.success}</Notice> : null}
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="block text-xs font-medium text-zinc-600" htmlFor={`item-name-${values?.id ?? "new"}`}>
-              Item name
-            </label>
-            <input
-              id={`item-name-${values?.id ?? "new"}`}
+        <Field
+          id={`item-name-${key}`}
+          label="Item name"
+          note="Shown as the dish name on the public menu."
+          required
+          error={state.fieldErrors?.name?.[0]}
+        >
+          {(control) => (
+            <Input
+              {...control}
               name="name"
               type="text"
-              required
               defaultValue={values?.name ?? ""}
-              className={inputClass}
               placeholder="Chicken Adobo"
             />
-            <FieldError message={state.fieldErrors?.name} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-600" htmlFor={`item-category-${values?.id ?? "new"}`}>
-              Category
-            </label>
-            <select
-              id={`item-category-${values?.id ?? "new"}`}
-              name="categoryId"
-              defaultValue={categoryId}
-              className={inputClass}
-              required
-            >
+          )}
+        </Field>
+
+        <Field
+          id={`item-category-${key}`}
+          label="Category"
+          note="Choose which menu section this item belongs to."
+          required
+          error={state.fieldErrors?.categoryId?.[0]}
+        >
+          {(control) => (
+            <Select {...control} name="categoryId" defaultValue={categoryId}>
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
                 </option>
               ))}
-            </select>
-            <FieldError message={state.fieldErrors?.categoryId} />
-          </div>
+            </Select>
+          )}
+        </Field>
+
+        <Field
+          id={`item-description-${key}`}
+          label="Description"
+          note="Optional ingredients, preparation, or serving notes."
+          optional
+          error={state.fieldErrors?.description?.[0]}
+        >
+          {(control) => (
+            <Textarea
+              {...control}
+              name="description"
+              rows={2}
+              defaultValue={values?.description ?? ""}
+              placeholder="Ingredients, preparation, or serving notes"
+            />
+          )}
+        </Field>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field
+            id={`item-price-${key}`}
+            label="Base price (PHP)"
+            note="Leave blank if every serving has a variant price."
+            noteLayout="below"
+            error={state.fieldErrors?.basePrice?.[0]}
+          >
+            {(control) => (
+              <Input
+                {...control}
+                name="basePrice"
+                type="text"
+                inputMode="decimal"
+                defaultValue={values?.basePrice ?? ""}
+                placeholder="185.00"
+              />
+            )}
+          </Field>
+
+          <Field
+            id={`item-availability-${key}`}
+            label="Availability"
+            note="Unavailable items stay listed but are marked to guests."
+            noteLayout="below"
+            error={state.fieldErrors?.availabilityStatus?.[0]}
+          >
+            {(control) => (
+              <Select
+                {...control}
+                name="availabilityStatus"
+                defaultValue={values?.availabilityStatus ?? "available"}
+              >
+                <option value="available">Available</option>
+                <option value="unavailable">Unavailable</option>
+              </Select>
+            )}
+          </Field>
+
+          <Field
+            id={`item-order-${key}`}
+            label="Sort order"
+            note="Lower numbers appear first within the category."
+            noteLayout="below"
+            error={state.fieldErrors?.sortOrder?.[0]}
+          >
+            {(control) => (
+              <Input
+                {...control}
+                name="sortOrder"
+                type="number"
+                min={0}
+                step={1}
+                defaultValue={values?.sortOrder ?? defaultSortOrder}
+              />
+            )}
+          </Field>
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-zinc-600" htmlFor={`item-description-${values?.id ?? "new"}`}>
-            Description
-          </label>
-          <textarea
-            id={`item-description-${values?.id ?? "new"}`}
-            name="description"
-            rows={2}
-            defaultValue={values?.description ?? ""}
-            className={inputClass}
-            placeholder="Ingredients, preparation, or serving notes"
+        <fieldset className="rounded-xl border border-zinc-200 bg-zinc-50/40 p-4">
+          <SectionHint
+            title="Variants"
+            description="Sizes or servings with their own price, e.g. Regular and Large."
+            action={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setVariants((rows) => [...rows, { name: "", price: "" }])
+                }
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                Add variant
+              </Button>
+            }
           />
-          <FieldError message={state.fieldErrors?.description} />
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <label className="block text-xs font-medium text-zinc-600" htmlFor={`item-price-${values?.id ?? "new"}`}>
-              Base price (PHP)
-            </label>
-            <input
-              id={`item-price-${values?.id ?? "new"}`}
-              name="basePrice"
-              type="text"
-              inputMode="decimal"
-              defaultValue={values?.basePrice ?? ""}
-              className={inputClass}
-              placeholder="185.00"
-            />
-            <p className="mt-1 text-[11px] text-zinc-500">
-              Leave blank if every serving has a variant price.
-            </p>
-            <FieldError message={state.fieldErrors?.basePrice} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-600" htmlFor={`item-availability-${values?.id ?? "new"}`}>
-              Availability
-            </label>
-            <select
-              id={`item-availability-${values?.id ?? "new"}`}
-              name="availabilityStatus"
-              defaultValue={values?.availabilityStatus ?? "available"}
-              className={inputClass}
-            >
-              <option value="available">Available</option>
-              <option value="unavailable">Unavailable</option>
-            </select>
-            <FieldError message={state.fieldErrors?.availabilityStatus} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-600" htmlFor={`item-order-${values?.id ?? "new"}`}>
-              Sort order
-            </label>
-            <input
-              id={`item-order-${values?.id ?? "new"}`}
-              name="sortOrder"
-              type="number"
-              min={0}
-              step={1}
-              defaultValue={values?.sortOrder ?? defaultSortOrder}
-              className={inputClass}
-            />
-            <FieldError message={state.fieldErrors?.sortOrder} />
-          </div>
-        </div>
-
-        <fieldset className="rounded-xl border border-zinc-200 p-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <legend className="text-xs font-semibold text-zinc-700">
-                Variants
-              </legend>
-              <p className="text-[11px] text-zinc-500">
-                Sizes or servings with their own price.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                setVariants((rows) => [...rows, { name: "", price: "" }])
-              }
-              className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-            >
-              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-              Add variant
-            </button>
-          </div>
 
           {variants.length > 0 ? (
             <div className="mt-3 space-y-2">
+              <div className="hidden gap-2 px-1 text-[11px] font-medium uppercase tracking-wide text-zinc-400 sm:grid sm:grid-cols-[minmax(0,1fr)_8rem_2rem]">
+                <span>Name</span>
+                <span>Price (PHP)</span>
+                <span />
+              </div>
               {variants.map((variant, index) => (
-                <div key={index} className="flex gap-2">
-                  <input
+                <div
+                  key={index}
+                  className="grid grid-cols-[minmax(0,1fr)_2rem] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_2rem]"
+                >
+                  <Input
                     value={variant.name}
                     onChange={(event) =>
                       setVariants((rows) =>
@@ -239,11 +264,11 @@ export function ItemForm({
                         ),
                       )
                     }
-                    className={inputClass}
+                    className="py-2"
                     placeholder="Regular"
                     aria-label={`Variant ${index + 1} name`}
                   />
-                  <input
+                  <Input
                     value={variant.price}
                     onChange={(event) =>
                       setVariants((rows) =>
@@ -254,7 +279,7 @@ export function ItemForm({
                         ),
                       )
                     }
-                    className={`${inputClass} sm:max-w-36`}
+                    className="col-start-1 py-2 sm:col-start-auto"
                     placeholder="185.00"
                     inputMode="decimal"
                     aria-label={`Variant ${index + 1} price`}
@@ -266,7 +291,7 @@ export function ItemForm({
                         rows.filter((_, rowIndex) => rowIndex !== index),
                       )
                     }
-                    className="mt-1 rounded-lg px-2 text-zinc-400 hover:text-red-600"
+                    className="col-start-2 row-start-1 flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-red-50 hover:text-red-600 sm:col-start-auto sm:row-start-auto"
                     aria-label={`Remove variant ${index + 1}`}
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -274,39 +299,49 @@ export function ItemForm({
                 </div>
               ))}
             </div>
-          ) : null}
+          ) : (
+            <p className="mt-3 text-xs text-zinc-500">
+              No variants yet. The base price will be used.
+            </p>
+          )}
         </fieldset>
 
-        <fieldset className="rounded-xl border border-zinc-200 p-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <legend className="text-xs font-semibold text-zinc-700">
-                Add-ons
-              </legend>
-              <p className="text-[11px] text-zinc-500">
-                Optional extras with an additional price.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                setModifiers((rows) => [
-                  ...rows,
-                  { name: "", price: "", isAvailable: true },
-                ])
-              }
-              className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-            >
-              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-              Add add-on
-            </button>
-          </div>
+        <fieldset className="rounded-xl border border-zinc-200 bg-zinc-50/40 p-4">
+          <SectionHint
+            title="Add-ons"
+            description="Optional extras with an additional price, e.g. Extra rice."
+            action={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setModifiers((rows) => [
+                    ...rows,
+                    { name: "", price: "", isAvailable: true },
+                  ])
+                }
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                Add add-on
+              </Button>
+            }
+          />
 
           {modifiers.length > 0 ? (
             <div className="mt-3 space-y-2">
+              <div className="hidden gap-2 px-1 text-[11px] font-medium uppercase tracking-wide text-zinc-400 sm:grid sm:grid-cols-[minmax(0,1fr)_7rem_5rem_2rem]">
+                <span>Name</span>
+                <span>Extra price</span>
+                <span>Available</span>
+                <span />
+              </div>
               {modifiers.map((modifier, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <input
+                <div
+                  key={index}
+                  className="grid grid-cols-[minmax(0,1fr)_2rem] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_5rem_2rem]"
+                >
+                  <Input
                     value={modifier.name}
                     onChange={(event) =>
                       setModifiers((rows) =>
@@ -317,11 +352,11 @@ export function ItemForm({
                         ),
                       )
                     }
-                    className={inputClass}
+                    className="py-2"
                     placeholder="Extra rice"
                     aria-label={`Add-on ${index + 1} name`}
                   />
-                  <input
+                  <Input
                     value={modifier.price}
                     onChange={(event) =>
                       setModifiers((rows) =>
@@ -332,12 +367,12 @@ export function ItemForm({
                         ),
                       )
                     }
-                    className={`${inputClass} sm:max-w-32`}
+                    className="col-start-1 py-2 sm:col-start-auto"
                     placeholder="25.00"
                     inputMode="decimal"
                     aria-label={`Add-on ${index + 1} price`}
                   />
-                  <label className="flex items-center gap-1 text-[11px] text-zinc-600">
+                  <label className="col-start-1 flex items-center gap-1.5 text-xs text-zinc-600 sm:col-start-auto">
                     <input
                       type="checkbox"
                       checked={modifier.isAvailable}
@@ -350,6 +385,7 @@ export function ItemForm({
                           ),
                         )
                       }
+                      className="h-4 w-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-600/40"
                     />
                     Available
                   </label>
@@ -360,7 +396,7 @@ export function ItemForm({
                         rows.filter((_, rowIndex) => rowIndex !== index),
                       )
                     }
-                    className="rounded-lg px-2 text-zinc-400 hover:text-red-600"
+                    className="col-start-2 row-start-1 flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-red-50 hover:text-red-600 sm:col-start-auto sm:row-start-auto"
                     aria-label={`Remove add-on ${index + 1}`}
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -368,24 +404,20 @@ export function ItemForm({
                 </div>
               ))}
             </div>
-          ) : null}
+          ) : (
+            <p className="mt-3 text-xs text-zinc-500">No add-ons yet.</p>
+          )}
         </fieldset>
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {pending
-            ? "Saving..."
-            : mode === "create"
-              ? "Add item"
-              : "Save item"}
-        </button>
+        <div className="border-t border-zinc-100 pt-4">
+          <Button type="submit" isLoading={pending} loadingLabel="Saving...">
+            {mode === "create" ? "Add item" : "Save item"}
+          </Button>
+        </div>
       </form>
 
       {values?.id ? (
-        <form action={deleteItemAction}>
+        <form action={deleteItemAction} className="border-t border-zinc-100 pt-3">
           <input type="hidden" name="restaurantId" value={restaurantId} />
           <input type="hidden" name="menuId" value={menuId} />
           <input type="hidden" name="itemId" value={values.id} />

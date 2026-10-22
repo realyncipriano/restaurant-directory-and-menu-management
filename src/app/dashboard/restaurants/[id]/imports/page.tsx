@@ -5,6 +5,15 @@ import { notFound } from "next/navigation";
 
 import { getDb } from "@/db/client";
 import { StartImportForm } from "@/components/imports/start-import-form";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
+import {
+  Card,
+  CardBody,
+  CardHeader,
+} from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Notice } from "@/components/ui/notice";
+import { PageHeader } from "@/components/ui/page-header";
 import { requireCurrentUser } from "@/lib/auth/guards";
 import {
   getExtractionConfig,
@@ -26,14 +35,14 @@ const dateFormatter = new Intl.DateTimeFormat("en-PH", {
   timeStyle: "short",
 });
 
-const statusStyles: Record<string, string> = {
-  uploading: "bg-sky-50 text-sky-700 ring-sky-600/20",
-  uploaded: "bg-zinc-100 text-zinc-700 ring-zinc-500/20",
-  processing: "bg-sky-50 text-sky-700 ring-sky-600/20",
-  needs_review: "bg-amber-50 text-amber-800 ring-amber-600/20",
-  reviewed: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
-  applied: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
-  failed: "bg-red-50 text-red-700 ring-red-600/20",
+const statusTones: Record<string, BadgeTone> = {
+  uploading: "info",
+  uploaded: "neutral",
+  processing: "info",
+  needs_review: "warning",
+  reviewed: "success",
+  applied: "success",
+  failed: "danger",
 };
 
 export default async function MenuImportsPage({
@@ -72,53 +81,41 @@ export default async function MenuImportsPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href={`/dashboard/restaurants/${restaurant.id}/menus`}
-          className="text-sm font-medium text-zinc-500 hover:text-zinc-800"
-        >
-          ← Menus
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900">
-          Menu scans
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
-          Upload menu photos, extract items into a review queue, and apply only
-          the items you accept to a draft menu. Published menus are never
-          changed directly.
-        </p>
-      </div>
+      <PageHeader
+        backHref={`/dashboard/restaurants/${restaurant.id}/menus`}
+        backLabel="Menus"
+        title="Menu scans"
+        description="Upload menu photos, extract items into a review queue, and apply only the items you accept to a draft menu. Published menus are never changed directly."
+      />
 
       {error ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <Notice tone="error">
           The action could not be completed. Please try again.
-        </p>
+        </Notice>
       ) : null}
 
       {!extractionConfigured ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Menu extraction is not configured. You can upload scans, but processing
-          stays disabled until an extraction provider and API key are set. Manual
-          menu entry remains available.
-        </p>
+        <Notice tone="warning" title="Menu extraction is not configured">
+          You can upload scans, but processing stays disabled until an extraction
+          provider and API key are set. Manual menu entry remains available.
+        </Notice>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <section className="space-y-4">
-          <h2 className="text-sm font-semibold text-zinc-900">Scan history</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-zinc-900">Scan history</h2>
+            <span className="text-xs text-zinc-500">
+              {data.imports.length} scan{data.imports.length === 1 ? "" : "s"}
+            </span>
+          </div>
+
           {data.imports.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-10 text-center">
-              <ScanLine
-                className="mx-auto h-7 w-7 text-amber-700"
-                aria-hidden="true"
-              />
-              <p className="mt-3 text-sm font-semibold text-zinc-900">
-                No scans yet
-              </p>
-              <p className="mt-1 text-sm text-zinc-600">
-                Upload menu photos to start an import.
-              </p>
-            </div>
+            <EmptyState
+              icon={<ScanLine className="h-6 w-6" aria-hidden="true" />}
+              title="No scans yet"
+              description="Upload menu photos to start an import. Extracted items always go through review first."
+            />
           ) : (
             <ul className="space-y-3">
               {data.imports.map(({ menuImport, menuTitle, menuStatus }) => {
@@ -131,17 +128,14 @@ export default async function MenuImportsPage({
                   <li key={menuImport.id}>
                     <Link
                       href={`/dashboard/restaurants/${restaurant.id}/imports/${menuImport.id}`}
-                      className="block rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-amber-300 hover:shadow"
+                      className="block rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md"
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ring-1 ring-inset ${
-                            statusStyles[menuImport.status] ??
-                            statusStyles.uploaded
-                          }`}
+                        <Badge
+                          tone={statusTones[menuImport.status] ?? "neutral"}
                         >
                           {menuImport.status.replaceAll("_", " ")}
-                        </span>
+                        </Badge>
                         <span className="text-sm font-medium text-zinc-800">
                           {menuTitle ?? "Draft menu removed"}
                         </span>
@@ -158,7 +152,12 @@ export default async function MenuImportsPage({
                         <p className="mt-2 text-xs text-red-600">
                           {errorMessage}
                         </p>
-                      ) : null}
+                      ) : (
+                        <p className="mt-2 text-xs text-zinc-500">
+                          Open to review extracted items and apply accepted
+                          changes to the draft.
+                        </p>
+                      )}
                     </Link>
                   </li>
                 );
@@ -167,16 +166,13 @@ export default async function MenuImportsPage({
           )}
         </section>
 
-        <section className="h-fit rounded-2xl border border-zinc-200 bg-white p-5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-            <ScanLine className="h-4 w-4 text-amber-700" aria-hidden="true" />
-            New scan
-          </h2>
-          <p className="mt-1 text-xs leading-5 text-zinc-500">
-            Choose up to {maxPages} page images. The draft menu is selected before
-            upload.
-          </p>
-          <div className="mt-4">
+        <Card className="h-fit">
+          <CardHeader
+            icon={<ScanLine className="h-4 w-4 text-amber-700" aria-hidden="true" />}
+            title="New scan"
+            description={`Choose up to ${maxPages} page images. The draft menu is selected before upload.`}
+          />
+          <CardBody>
             {canEdit ? (
               <StartImportForm
                 restaurantId={restaurant.id}
@@ -185,14 +181,14 @@ export default async function MenuImportsPage({
                 maxPages={maxPages}
               />
             ) : (
-              <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600">
+              <Notice tone="warning">
                 {restaurant.status !== "active"
                   ? "This restaurant is archived. Reactivate it before importing menus."
                   : "You need menu editing permission to import scans."}
-              </p>
+              </Notice>
             )}
-          </div>
-        </section>
+          </CardBody>
+        </Card>
       </div>
     </div>
   );

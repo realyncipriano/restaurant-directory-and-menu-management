@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { RestaurantForm } from "@/components/restaurants/restaurant-form";
+import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { requireAdminUser } from "@/lib/auth/guards";
 
 export const metadata: Metadata = {
@@ -14,25 +15,16 @@ export default async function NewRestaurantPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/dashboard/restaurants"
-          className="text-sm font-medium text-zinc-500 hover:text-zinc-800"
-        >
-          ← Restaurants
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900">
-          New restaurant
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
-          Create the profile first. Menus and team access can be added after the
-          restaurant exists.
-        </p>
-      </div>
+      <PageHeader
+        backHref="/dashboard/restaurants"
+        backLabel="Restaurants"
+        title="New restaurant"
+        description="Create the profile first. Menus and team access can be added after the restaurant exists."
+      />
 
-      <div className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6">
+      <Card className="p-5 sm:p-6">
         <RestaurantForm mode="create" canEditSlug />
-      </div>
+      </Card>
     </div>
   );
 }

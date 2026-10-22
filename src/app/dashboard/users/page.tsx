@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
+import { UserPlus, Users } from "lucide-react";
 
 import { getDb } from "@/db/client";
 import { InviteForm } from "@/components/dashboard/invite-form";
 import { ResetLinkForm } from "@/components/dashboard/reset-link-form";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { buttonClass } from "@/components/ui/button";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Notice } from "@/components/ui/notice";
+import { PageHeader } from "@/components/ui/page-header";
 import { requireAdminUser } from "@/lib/auth/guards";
 import { listUsers } from "@/server/services/auth";
 import {
@@ -15,13 +21,13 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const statusStyles: Record<string, string> = {
-  active: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
-  invited: "bg-amber-50 text-amber-700 ring-amber-600/20",
-  deactivated: "bg-zinc-100 text-zinc-600 ring-zinc-500/20",
+const statusTones: Record<string, BadgeTone> = {
+  active: "success",
+  invited: "warning",
+  deactivated: "neutral",
 };
 
-function Notice({
+function NoticeMessage({
   notice,
   error,
 }: {
@@ -29,31 +35,38 @@ function Notice({
   error?: string;
 }) {
   if (error) {
-    const message =
-      error === "conflict"
-        ? "That change is not allowed. At least one active administrator must remain, and you cannot deactivate yourself."
-        : "The action could not be completed. Please try again.";
     return (
-      <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-        {message}
-      </p>
+      <Notice tone="error">
+        {error === "conflict"
+          ? "That change is not allowed. At least one active administrator must remain, and you cannot deactivate yourself."
+          : "The action could not be completed. Please try again."}
+      </Notice>
     );
   }
   if (notice === "deactivated") {
     return (
-      <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+      <Notice tone="success">
         Account deactivated and signed out everywhere.
-      </p>
+      </Notice>
     );
   }
   if (notice === "reactivated") {
     return (
-      <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+      <Notice tone="success">
         Account reactivated. The user can sign in with their existing password.
-      </p>
+      </Notice>
     );
   }
   return null;
+}
+
+function initialsFor(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
 }
 
 export default async function UsersPage({
@@ -69,80 +82,73 @@ export default async function UsersPage({
   const error = typeof params.error === "string" ? params.error : undefined;
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
-          Users
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
-          Invite team members and control access. There is no public sign-up;
-          every account starts with a single-use invitation.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        icon={<Users className="h-5 w-5" aria-hidden="true" />}
+        title="Users"
+        description="Invite team members and control access. There is no public sign-up; every account starts with a single-use invitation."
+      />
 
-      <Notice notice={notice} error={error} />
+      <NoticeMessage notice={notice} error={error} />
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6">
-        <h2 className="text-sm font-semibold text-zinc-900">
-          Invite a team member
-        </h2>
-        <p className="mt-1 text-sm text-zinc-600">
-          The invitation link is shown once and expires in seven days.
-        </p>
-        <div className="mt-4">
+      <Card>
+        <CardHeader
+          icon={<UserPlus className="h-4 w-4 text-amber-700" aria-hidden="true" />}
+          title="Invite a team member"
+          description="The invitation link is shown once and expires in seven days."
+        />
+        <CardBody>
           <InviteForm />
-        </div>
-      </section>
+        </CardBody>
+      </Card>
 
-      <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
-        <div className="border-b border-zinc-200 px-5 py-4">
-          <h2 className="text-sm font-semibold text-zinc-900">
-            Team accounts
-          </h2>
-          <p className="mt-1 text-xs text-zinc-500">
-            {users.length} account{users.length === 1 ? "" : "s"}
-          </p>
-        </div>
+      <Card className="overflow-hidden">
+        <CardHeader
+          title="Team accounts"
+          description={`${users.length} account${users.length === 1 ? "" : "s"}`}
+        />
 
         <div className="divide-y divide-zinc-100">
           {users.map((user) => (
             <div
               key={user.id}
-              className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-start sm:justify-between"
+              className="flex flex-col gap-4 px-5 py-4 sm:px-6 lg:flex-row lg:items-start lg:justify-between"
             >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="truncate text-sm font-medium text-zinc-900">
-                    {user.name}
+              <div className="flex min-w-0 items-start gap-3">
+                <span
+                  aria-hidden="true"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-xs font-semibold text-zinc-700"
+                >
+                  {initialsFor(user.name) || "?"}
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-medium text-zinc-900">
+                      {user.name}
+                    </p>
+                    {user.id === admin.id ? (
+                      <Badge tone="neutral">You</Badge>
+                    ) : null}
+                    <Badge tone={statusTones[user.accountStatus] ?? "neutral"}>
+                      {user.accountStatus}
+                    </Badge>
+                  </div>
+                  <p className="mt-0.5 truncate text-sm text-zinc-600">
+                    {user.email}
                   </p>
-                  {user.id === admin.id ? (
-                    <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                      You
-                    </span>
-                  ) : null}
-                  <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
-                      statusStyles[user.accountStatus] ?? statusStyles.deactivated
-                    }`}
-                  >
-                    {user.accountStatus}
-                  </span>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {user.role === "admin" ? "Administrator" : "Authorized user"}
+                    {user.lastLoginAt
+                      ? ` · Last sign-in ${new Intl.DateTimeFormat("en-PH", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        }).format(user.lastLoginAt)}`
+                      : " · Never signed in"}
+                  </p>
                 </div>
-                <p className="mt-0.5 truncate text-sm text-zinc-600">
-                  {user.email}
-                </p>
-                <p className="mt-1 text-xs text-zinc-500">
-                  {user.role === "admin" ? "Administrator" : "Authorized user"}
-                  {user.lastLoginAt
-                    ? ` · Last sign-in ${new Intl.DateTimeFormat("en-PH", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      }).format(user.lastLoginAt)}`
-                    : " · Never signed in"}
-                </p>
               </div>
 
-              <div className="flex flex-wrap items-start gap-3 sm:justify-end">
+              <div className="flex flex-wrap items-start gap-2 lg:justify-end">
                 {user.accountStatus === "active" ? (
                   <ResetLinkForm userId={user.id} />
                 ) : null}
@@ -152,7 +158,10 @@ export default async function UsersPage({
                     <input type="hidden" name="userId" value={user.id} />
                     <button
                       type="submit"
-                      className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                      className={buttonClass({
+                        variant: "outline",
+                        size: "sm",
+                      })}
                     >
                       Reactivate
                     </button>
@@ -164,7 +173,7 @@ export default async function UsersPage({
                     <input type="hidden" name="userId" value={user.id} />
                     <button
                       type="submit"
-                      className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                      className={buttonClass({ variant: "danger", size: "sm" })}
                     >
                       Deactivate
                     </button>
@@ -174,7 +183,7 @@ export default async function UsersPage({
             </div>
           ))}
         </div>
-      </section>
+      </Card>
     </div>
   );
 }

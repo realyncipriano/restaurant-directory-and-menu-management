@@ -6,15 +6,12 @@ import {
   createMenuAction,
   updateMenuSettingsAction,
 } from "@/app/dashboard/restaurants/[id]/menus/actions";
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Notice } from "@/components/ui/notice";
+import { Textarea } from "@/components/ui/textarea";
 import { EMPTY_FORM_STATE } from "@/lib/action-state";
-
-const inputClass =
-  "mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20";
-
-function FieldError({ message }: { message?: string[] }) {
-  if (!message?.length) return null;
-  return <p className="mt-1 text-xs text-red-600">{message[0]}</p>;
-}
 
 export function MenuForm({
   mode,
@@ -37,81 +34,70 @@ export function MenuForm({
   );
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className="space-y-5">
       <input type="hidden" name="restaurantId" value={restaurantId} />
       {menuId ? <input type="hidden" name="menuId" value={menuId} /> : null}
 
-      {state.error ? (
-        <p
-          role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-        >
-          {state.error}
-        </p>
-      ) : null}
+      {state.error ? <Notice tone="error">{state.error}</Notice> : null}
 
-      <div>
-        <label htmlFor={`${mode}-title`} className="block text-sm font-medium text-zinc-700">
-          Menu title
-        </label>
-        <input
-          id={`${mode}-title`}
-          name="title"
-          type="text"
-          required
-          defaultValue={values.title ?? ""}
-          className={inputClass}
-          placeholder="Lunch Menu"
-        />
-        <FieldError message={state.fieldErrors?.title} />
-      </div>
-
-      <div>
-        <label htmlFor={`${mode}-slug`} className="block text-sm font-medium text-zinc-700">
-          URL slug
-        </label>
-        <input
-          id={`${mode}-slug`}
-          name="slug"
-          type="text"
-          defaultValue={values.slug ?? ""}
-          className={inputClass}
-          placeholder="lunch-menu"
-          pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-        />
-        <p className="mt-1 text-xs text-zinc-500">
-          Leave blank to generate one from the title. Lowercase letters, numbers,
-          and hyphens only.
-        </p>
-        <FieldError message={state.fieldErrors?.slug} />
-      </div>
-
-      <div>
-        <label htmlFor={`${mode}-description`} className="block text-sm font-medium text-zinc-700">
-          Description
-        </label>
-        <textarea
-          id={`${mode}-description`}
-          name="description"
-          rows={3}
-          defaultValue={values.description ?? ""}
-          className={inputClass}
-          placeholder="What makes this menu special?"
-        />
-        <FieldError message={state.fieldErrors?.description} />
-      </div>
-
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+      <Field
+        id={`${mode}-title`}
+        label="Menu title"
+        note="Shown at the top of the public menu, e.g. Lunch Menu or Weekend Brunch."
+        required
+        error={state.fieldErrors?.title?.[0]}
       >
-        {pending
-          ? "Saving..."
-          : mode === "create"
-            ? "Create draft menu"
-            : "Save menu details"}
-      </button>
+        {(control) => (
+          <Input
+            {...control}
+            name="title"
+            type="text"
+            defaultValue={values.title ?? ""}
+            placeholder="Lunch Menu"
+          />
+        )}
+      </Field>
+
+      <Field
+        id={`${mode}-slug`}
+        label="URL slug"
+        note="Leave blank to generate one from the title. Lowercase letters, numbers, and hyphens only."
+        error={state.fieldErrors?.slug?.[0]}
+      >
+        {(control) => (
+          <Input
+            {...control}
+            name="slug"
+            type="text"
+            defaultValue={values.slug ?? ""}
+            placeholder="lunch-menu"
+            pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+          />
+        )}
+      </Field>
+
+      <Field
+        id={`${mode}-description`}
+        label="Description"
+        note="Optional short note shown under the menu title on the public page."
+        error={state.fieldErrors?.description?.[0]}
+      >
+        {(control) => (
+          <Textarea
+            {...control}
+            name="description"
+            rows={3}
+            defaultValue={values.description ?? ""}
+            placeholder="What makes this menu special?"
+          />
+        )}
+      </Field>
+
+      <div className="border-t border-zinc-100 pt-5">
+        <Button type="submit" isLoading={pending} loadingLabel="Saving...">
+          {mode === "create" ? "Create draft menu" : "Save menu details"}
+        </Button>
+      </div>
     </form>
   );
 }

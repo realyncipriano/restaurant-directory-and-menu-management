@@ -25,15 +25,15 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+      <header className="sticky top-0 z-30 border-b border-zinc-200/80 bg-white/90 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
           <div className="flex items-center justify-between gap-4">
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-600 text-white">
-                <UtensilsCrossed className="h-4 w-4" aria-hidden="true" />
+            <Link href="/dashboard" className="flex items-center gap-2.5">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-amber-500 to-amber-700 text-white shadow-sm">
+                <UtensilsCrossed className="h-5 w-5" aria-hidden="true" />
               </span>
-              <span>
-                <span className="block text-sm font-semibold text-zinc-900">
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-zinc-900">
                   {settings.siteName}
                 </span>
                 <span className="block text-xs text-zinc-500">
@@ -41,10 +41,11 @@ export default async function DashboardLayout({
                 </span>
               </span>
             </Link>
+
             <form action={logoutAction} className="lg:hidden">
               <button
                 type="submit"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-600 shadow-sm transition hover:bg-zinc-50"
               >
                 <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
                 Sign out
@@ -52,9 +53,10 @@ export default async function DashboardLayout({
             </form>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:justify-end">
             <DashboardNav isAdmin={user.role === "admin"} />
-            <div className="flex items-center gap-3">
+
+            <div className="flex items-center gap-3 border-t border-zinc-100 pt-3 sm:border-0 sm:pt-0">
               <div className="hidden text-right sm:block">
                 <p className="text-sm font-medium text-zinc-900">{user.name}</p>
                 <p className="text-xs text-zinc-500">
@@ -63,14 +65,14 @@ export default async function DashboardLayout({
               </div>
               <span
                 aria-hidden="true"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold text-white ring-2 ring-white"
               >
                 {initials || "?"}
               </span>
               <form action={logoutAction} className="hidden lg:block">
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-600 shadow-sm transition hover:bg-zinc-50"
                 >
                   <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
                   Sign out
@@ -81,7 +83,9 @@ export default async function DashboardLayout({
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">{children}</main>
+      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:py-10">
+        {children}
+      </main>
     </div>
   );
 }

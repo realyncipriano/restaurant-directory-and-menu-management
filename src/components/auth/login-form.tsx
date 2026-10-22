@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import { loginAction } from "@/app/(auth)/actions";
+import { Spinner } from "@/components/ui/spinner";
 import { EMPTY_FORM_STATE } from "@/lib/action-state";
 
 const inputClass =
@@ -66,8 +67,9 @@ export function LoginForm({ next }: { next: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
       >
+        {pending ? <Spinner className="h-4 w-4" /> : null}
         {pending ? "Signing in..." : "Sign in"}
       </button>
 

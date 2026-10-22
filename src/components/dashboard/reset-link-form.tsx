@@ -4,6 +4,8 @@ import { useActionState } from "react";
 
 import { createResetLinkAction } from "@/app/dashboard/users/actions";
 import { CopyButton } from "@/components/copy-button";
+import { buttonClass } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { EMPTY_INVITE_STATE } from "@/lib/action-state";
 
 export function ResetLinkForm({ userId }: { userId: string }) {
@@ -19,8 +21,9 @@ export function ResetLinkForm({ userId }: { userId: string }) {
         <button
           type="submit"
           disabled={pending}
-          className="text-xs font-medium text-zinc-600 underline-offset-2 hover:text-zinc-900 hover:underline disabled:opacity-50"
+          className={buttonClass({ variant: "outline", size: "sm" })}
         >
+          {pending ? <Spinner className="h-3 w-3" /> : null}
           {pending ? "Creating..." : "Password reset link"}
         </button>
       </form>
@@ -29,7 +32,7 @@ export function ResetLinkForm({ userId }: { userId: string }) {
       ) : null}
       {state.inviteUrl ? (
         <div className="space-y-2">
-          <code className="block max-w-xs overflow-x-auto rounded bg-zinc-100 px-2 py-1 text-[11px] text-zinc-700">
+          <code className="block max-w-xs overflow-x-auto rounded-lg bg-zinc-100 px-2 py-1 font-mono text-[11px] text-zinc-700">
             {state.inviteUrl}
           </code>
           <CopyButton value={state.inviteUrl} label="Copy reset link" />

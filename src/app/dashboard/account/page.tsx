@@ -1,7 +1,16 @@
 import type { Metadata } from "next";
+import { ShieldCheck, UserCircle } from "lucide-react";
 
 import { signOutEverywhereAction } from "@/app/(auth)/actions";
 import { ChangePasswordForm } from "@/components/account/change-password-form";
+import { buttonClass } from "@/components/ui/button";
+import {
+  Card,
+  CardBody,
+  CardHeader,
+} from "@/components/ui/card";
+import { Notice } from "@/components/ui/notice";
+import { PageHeader } from "@/components/ui/page-header";
 import { requireCurrentUser } from "@/lib/auth/guards";
 
 export const metadata: Metadata = {
@@ -19,80 +28,82 @@ export default async function AccountPage({
   const updated = params.updated === "1";
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
-          Account
-        </h1>
-        <p className="mt-2 text-sm leading-6 text-zinc-600">
-          Your sign-in details and session security.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        icon={<UserCircle className="h-5 w-5" aria-hidden="true" />}
+        title="Account"
+        description="Your sign-in details and session security."
+      />
 
       {updated ? (
-        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+        <Notice tone="success">
           Password updated. Other sessions were signed out.
-        </p>
+        </Notice>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6">
-          <h2 className="text-sm font-semibold text-zinc-900">Profile</h2>
-          <dl className="mt-4 space-y-3 text-sm">
-            <div>
-              <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                Name
-              </dt>
-              <dd className="mt-0.5 text-zinc-900">{user.name}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                Email
-              </dt>
-              <dd className="mt-0.5 break-all text-zinc-900">{user.email}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                Role
-              </dt>
-              <dd className="mt-0.5 text-zinc-900">
-                {user.role === "admin" ? "Administrator" : "Authorized user"}
-              </dd>
-            </div>
-          </dl>
-          <p className="mt-5 text-xs leading-5 text-zinc-500">
-            Ask an administrator to update your name or email address.
-          </p>
-        </section>
+        <Card>
+          <CardHeader title="Profile" />
+          <CardBody>
+            <dl className="space-y-3 text-sm">
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  Name
+                </dt>
+                <dd className="mt-0.5 text-zinc-900">{user.name}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  Email
+                </dt>
+                <dd className="mt-0.5 break-all text-zinc-900">{user.email}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  Role
+                </dt>
+                <dd className="mt-0.5 text-zinc-900">
+                  {user.role === "admin" ? "Administrator" : "Authorized user"}
+                </dd>
+              </div>
+            </dl>
+            <p className="mt-5 text-xs leading-5 text-zinc-500">
+              Ask an administrator to update your name or email address.
+            </p>
+          </CardBody>
+        </Card>
 
-        <section className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6">
-          <h2 className="text-sm font-semibold text-zinc-900">
-            Change password
-          </h2>
-          <p className="mt-1 text-sm text-zinc-600">
-            Updating your password signs out every other device.
-          </p>
-          <div className="mt-4">
+        <Card>
+          <CardHeader
+            title="Change password"
+            description="Updating your password signs out every other device."
+          />
+          <CardBody>
             <ChangePasswordForm />
-          </div>
-        </section>
+          </CardBody>
+        </Card>
       </div>
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6">
-        <h2 className="text-sm font-semibold text-zinc-900">All sessions</h2>
-        <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-600">
-          Sign out of this browser and every other device immediately. You will
-          need to sign in again.
-        </p>
-        <form action={signOutEverywhereAction} className="mt-4">
-          <button
-            type="submit"
-            className="rounded-lg border border-red-300 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50"
-          >
-            Sign out everywhere
-          </button>
-        </form>
-      </section>
+      <Card className="border-red-200 bg-red-50/30">
+        <CardBody>
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+            <ShieldCheck className="h-4 w-4 text-red-600" aria-hidden="true" />
+            All sessions
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-600">
+            Sign out of this browser and every other device immediately. You will
+            need to sign in again.
+          </p>
+          <form action={signOutEverywhereAction} className="mt-4">
+            <button
+              type="submit"
+              className={buttonClass({ variant: "danger" })}
+            >
+              Sign out everywhere
+            </button>
+          </form>
+        </CardBody>
+      </Card>
     </div>
   );
 }

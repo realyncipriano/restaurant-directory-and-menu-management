@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 
 import { applyImportAction } from "@/app/dashboard/restaurants/[id]/imports/actions";
+import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { EMPTY_FORM_STATE } from "@/lib/action-state";
 
 export function ApplyImportForm({
@@ -20,27 +22,20 @@ export function ApplyImportForm({
   );
 
   return (
-    <form action={formAction} className="space-y-2">
+    <form action={formAction} className="space-y-2" aria-busy={pending}>
       <input type="hidden" name="restaurantId" value={restaurantId} />
       <input type="hidden" name="importId" value={importId} />
-      {state.error ? (
-        <p
-          role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-        >
-          {state.error}
-        </p>
-      ) : null}
-      <button
+      {state.error ? <Notice tone="error">{state.error}</Notice> : null}
+      <Button
         type="submit"
-        disabled={pending || acceptCount === 0}
-        className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+        variant="success"
+        isLoading={pending}
+        loadingLabel={`Applying ${acceptCount} item${acceptCount === 1 ? "" : "s"} to draft...`}
+        disabled={acceptCount === 0}
       >
-        {pending
-          ? "Applying..."
-          : `Apply ${acceptCount} accepted item${acceptCount === 1 ? "" : "s"} to draft`}
-      </button>
-      <p className="text-xs text-zinc-500">
+        {`Apply ${acceptCount} accepted item${acceptCount === 1 ? "" : "s"} to draft`}
+      </Button>
+      <p className="text-xs leading-5 text-zinc-500">
         Items missing from the scan are not deleted. Existing items are only
         updated when an accepted scan item matches them.
       </p>

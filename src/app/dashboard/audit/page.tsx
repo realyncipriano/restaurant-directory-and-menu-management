@@ -2,6 +2,13 @@ import type { Metadata } from "next";
 import { ChevronLeft, ChevronRight, History, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
+import { Badge } from "@/components/ui/badge";
+import { buttonClass } from "@/components/ui/button";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
+import { Select } from "@/components/ui/select";
 import { getDb } from "@/db/client";
 import { requireAdminUser } from "@/lib/auth/guards";
 import {
@@ -79,88 +86,95 @@ export default async function AuditHistoryPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-900">
-          <History className="h-6 w-6 text-amber-700" aria-hidden="true" />
-          Audit history
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
-          Every sign-in, permission change, menu update, publish, and import is
-          recorded with the actor and timestamp. IP addresses are never stored.
-        </p>
-      </div>
+      <PageHeader
+        icon={<History className="h-5 w-5" aria-hidden="true" />}
+        title="Audit history"
+        description="Every sign-in, permission change, menu update, publish, and import is recorded with the actor and timestamp. IP addresses are never stored."
+      />
 
-      <form
-        action="/dashboard/audit"
-        method="get"
-        className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 sm:grid-cols-[12rem_12rem_1fr_auto]"
-      >
-        <label className="block text-xs font-medium text-zinc-700">
-          Action
-          <select
-            name="action"
-            defaultValue={action}
-            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-amber-500 focus:outline-none"
+      <Card>
+        <CardBody>
+          <form
+            action="/dashboard/audit"
+            method="get"
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[12rem_12rem_1fr_auto]"
           >
-            <option value="">All actions</option>
-            {actionOptions.map((value) => (
-              <option key={value} value={value}>
-                {humanizeAction(value)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-xs font-medium text-zinc-700">
-          Entity
-          <select
-            name="entityType"
-            defaultValue={entityType}
-            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-amber-500 focus:outline-none"
-          >
-            <option value="">All entities</option>
-            {entityTypeOptions.map((value) => (
-              <option key={value} value={value}>
-                {humanizeAction(value)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-xs font-medium text-zinc-700">
-          Actor email
-          <input
-            name="actor"
-            defaultValue={actor}
-            placeholder="name@example.com"
-            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-amber-500 focus:outline-none"
-          />
-        </label>
-        <div className="flex items-end gap-2">
-          <button
-            type="submit"
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
-          >
-            Filter
-          </button>
-          <Link
-            href="/dashboard/audit"
-            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-          >
-            Reset
-          </Link>
-        </div>
-      </form>
+            <Field
+              id="audit-action"
+              label="Action"
+              note="Filter by what happened."
+              noteLayout="below"
+            >
+              {(control) => (
+                <Select {...control} name="action" defaultValue={action}>
+                  <option value="">All actions</option>
+                  {actionOptions.map((value) => (
+                    <option key={value} value={value}>
+                      {humanizeAction(value)}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
 
-      <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-5 py-4">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-zinc-400" aria-hidden="true" />
-            <h2 className="text-sm font-semibold text-zinc-900">Events</h2>
-          </div>
-          <p className="text-xs text-zinc-500">
-            {data.total} event{data.total === 1 ? "" : "s"} · page {data.page} of{" "}
-            {data.pageCount}
-          </p>
-        </div>
+            <Field
+              id="audit-entity"
+              label="Entity"
+              note="Restaurants, menus, users, and more."
+              noteLayout="below"
+            >
+              {(control) => (
+                <Select {...control} name="entityType" defaultValue={entityType}>
+                  <option value="">All entities</option>
+                  {entityTypeOptions.map((value) => (
+                    <option key={value} value={value}>
+                      {humanizeAction(value)}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+
+            <Field
+              id="audit-actor"
+              label="Actor email"
+              note="Exact or partial email of the person who made the change."
+              noteLayout="below"
+            >
+              {(control) => (
+                <Input
+                  {...control}
+                  name="actor"
+                  defaultValue={actor}
+                  placeholder="name@example.com"
+                />
+              )}
+            </Field>
+
+            <div className="flex items-start gap-2 lg:pt-6">
+              <button
+                type="submit"
+                className={buttonClass({ variant: "secondary" })}
+              >
+                Filter
+              </button>
+              <Link
+                href="/dashboard/audit"
+                className={buttonClass({ variant: "outline" })}
+              >
+                Reset
+              </Link>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardHeader
+          icon={<ShieldCheck className="h-4 w-4 text-zinc-400" aria-hidden="true" />}
+          title="Events"
+          description={`${data.total} event${data.total === 1 ? "" : "s"} · page ${data.page} of ${data.pageCount}`}
+        />
 
         {data.logs.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-zinc-500">
@@ -171,11 +185,11 @@ export default async function AuditHistoryPage({
             {data.logs.map((log) => {
               const details = formatDetails(log.details);
               return (
-                <li key={log.id} className="px-5 py-4">
+                <li key={log.id} className="px-5 py-4 sm:px-6">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium capitalize text-zinc-700">
+                    <Badge tone="neutral" className="capitalize">
                       {humanizeAction(log.action)}
-                    </span>
+                    </Badge>
                     <span className="text-xs text-zinc-500">
                       {log.entityType}
                     </span>
@@ -211,11 +225,11 @@ export default async function AuditHistoryPage({
         )}
 
         {data.pageCount > 1 ? (
-          <div className="flex items-center justify-between border-t border-zinc-200 px-5 py-3">
+          <div className="flex items-center justify-between border-t border-zinc-200 px-5 py-3 sm:px-6">
             {data.page > 1 ? (
               <Link
                 href={pageHref(filters, data.page - 1)}
-                className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                className={buttonClass({ variant: "outline", size: "sm" })}
               >
                 <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
                 Newer
@@ -229,7 +243,7 @@ export default async function AuditHistoryPage({
             {data.page < data.pageCount ? (
               <Link
                 href={pageHref(filters, data.page + 1)}
-                className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                className={buttonClass({ variant: "outline", size: "sm" })}
               >
                 Older
                 <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -239,7 +253,7 @@ export default async function AuditHistoryPage({
             )}
           </div>
         ) : null}
-      </section>
+      </Card>
     </div>
   );
 }

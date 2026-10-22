@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getDb } from "@/db/client";
 import { RestaurantForm } from "@/components/restaurants/restaurant-form";
+import { Card } from "@/components/ui/card";
+import { Notice } from "@/components/ui/notice";
+import { PageHeader } from "@/components/ui/page-header";
+import { getDb } from "@/db/client";
 import { requireCurrentUser } from "@/lib/auth/guards";
 import { NotFoundError } from "@/lib/errors";
 import { getRestaurantAccess } from "@/server/services/restaurant-access";
@@ -35,25 +37,19 @@ export default async function EditRestaurantPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href={`/dashboard/restaurants/${restaurant.id}`}
-          className="text-sm font-medium text-zinc-500 hover:text-zinc-800"
-        >
-          ← {restaurant.name}
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900">
-          Edit restaurant details
-        </h1>
-      </div>
+      <PageHeader
+        backHref={`/dashboard/restaurants/${restaurant.id}`}
+        backLabel={restaurant.name}
+        title="Edit restaurant details"
+        description="These details appear on the public restaurant page. Changes are visible immediately after saving."
+      />
 
       {restaurant.status === "archived" ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900">
-          This restaurant is archived. An administrator must reactivate it
-          before details can be edited.
-        </div>
+        <Notice tone="warning" title="This restaurant is archived">
+          An administrator must reactivate it before details can be edited.
+        </Notice>
       ) : (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6">
+        <Card className="p-5 sm:p-6">
           <RestaurantForm
             mode="edit"
             canEditSlug={access.actor.role === "admin"}
@@ -70,7 +66,7 @@ export default async function EditRestaurantPage({
               operatingHours: restaurant.operatingHours,
             }}
           />
-        </div>
+        </Card>
       )}
     </div>
   );
