@@ -7,13 +7,54 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-zinc-50: #faf8f3;
+  --color-zinc-100: #f2eee6;
+  --color-zinc-200: #e5ded2;
+  --color-zinc-300: #d2c8b9;
+  --color-zinc-400: #a99e8f;
+  --color-zinc-500: #7b7165;
+  --color-zinc-600: #62594e;
+  --color-zinc-700: #4a433a;
+  --color-zinc-800: #332d26;
+  --color-zinc-900: #241f1a;
+  --color-zinc-950: #171410;
+
+  --color-amber-50: #fff4e7;
+  --color-amber-100: #fbe8cf;
+  --color-amber-200: #f3d2a8;
+  --color-amber-300: #e8b675;
+  --color-amber-400: #d9924b;
+  --color-amber-500: #c87835;
+  --color-amber-600: #ad5c2c;
+  --color-amber-700: #914725;
+  --color-amber-800: #743b22;
+  --color-amber-900: #5b311f;
+  --color-amber-950: #351a10;
 }
 
 body {
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  background-color: #faf8f3;
 }
 
 ::selection {
-  background-color: #fde68a;
-  color: #422006;
+  background-color: #f3d2a8;
+  color: #351a10;
+}
+
+:focus-visible {
+  outline: 2px solid #ad5c2c;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

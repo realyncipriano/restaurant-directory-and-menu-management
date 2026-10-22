@@ -14,11 +14,11 @@ export type ButtonVariant =
 export type ButtonSize = "sm" | "md" | "lg";
 
 const baseClass =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-amber-600 text-white shadow-sm hover:bg-amber-700 focus-visible:ring-offset-white",
+    "bg-amber-700 text-white shadow-sm hover:bg-amber-800 focus-visible:ring-offset-white",
   secondary:
     "bg-zinc-900 text-white shadow-sm hover:bg-zinc-800 focus-visible:ring-zinc-900/30 focus-visible:ring-offset-white",
   outline:

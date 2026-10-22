@@ -57,10 +57,10 @@ function NavGroup({
             href={link.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition",
+              "inline-flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition",
               active
-                ? "bg-white text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-200"
-                : "text-zinc-600 hover:bg-white/60 hover:text-zinc-900",
+                ? "bg-white text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-200/80"
+                : "text-zinc-600 hover:bg-white/70 hover:text-zinc-900",
             )}
           >
             <Icon className="h-4 w-4" aria-hidden="true" />
@@ -87,7 +87,7 @@ export function DashboardNav({ isAdmin }: { isAdmin: boolean }) {
   return (
     <nav
       aria-label="Management console"
-      className="flex items-center gap-1 overflow-x-auto rounded-xl bg-zinc-100/80 p-1 [scrollbar-width:none]"
+      className="flex items-center gap-1 overflow-x-auto rounded-lg bg-zinc-100 p-1 [scrollbar-width:none]"
     >
       <NavGroup links={primaryLinks} pathname={pathname} />
       {isAdmin ? (

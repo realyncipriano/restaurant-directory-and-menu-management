@@ -11,6 +11,7 @@ import { connection } from "next/server";
 
 import { SiteShell } from "@/components/public/site-shell";
 import { getDb } from "@/db/client";
+import { getPublicImageUrl } from "@/server/services/images";
 import {
   listPublicCuisines,
   listPublicRestaurants,
@@ -48,16 +49,16 @@ export default async function Home({
 
   return (
     <SiteShell>
-      <section className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+      <section className="border-b border-zinc-200 bg-[#f4efe5]">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
           <div className="max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">
               Restaurant directory
             </p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">
+            <h1 className="mt-3 max-w-2xl font-serif text-4xl font-medium leading-[1.08] tracking-tight text-zinc-900 sm:text-5xl">
               Know what is on the menu before you go.
             </h1>
-            <p className="mt-4 text-lg leading-8 text-zinc-600">
+            <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-600 sm:text-lg sm:leading-8">
               Browse restaurants and their current menus, kept up to date by the
               people who run them. Prices are shown in Philippine pesos.
             </p>
@@ -66,7 +67,7 @@ export default async function Home({
           <form
             action="/"
             method="get"
-            className="mt-8 grid gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 sm:grid-cols-[1fr_14rem_auto]"
+            className="mt-8 grid gap-3 rounded-xl border border-zinc-200 bg-white/80 p-3 shadow-sm sm:grid-cols-[1fr_14rem_auto]"
           >
             <div className="relative">
               <Search
@@ -107,7 +108,7 @@ export default async function Home({
 
             <button
               type="submit"
-              className="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700"
+              className="rounded-lg bg-amber-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-800"
             >
               Search
             </button>
@@ -156,55 +157,70 @@ export default async function Home({
           </div>
         ) : (
           <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {restaurants.map(({ restaurant, publishedMenuCount }) => (
-              <Link
-                key={restaurant.id}
-                href={`/restaurants/${restaurant.slug}`}
-                className="group flex flex-col rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-amber-300 hover:shadow"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-base font-semibold text-zinc-900 group-hover:text-amber-800">
-                    {restaurant.name}
-                  </h2>
-                  <UtensilsCrossed
-                    className="h-5 w-5 shrink-0 text-amber-600"
-                    aria-hidden="true"
-                  />
-                </div>
+            {restaurants.map(({ restaurant, publishedMenuCount }) => {
+              const coverUrl = getPublicImageUrl(restaurant.coverObjectKey);
 
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
-                  {restaurant.cuisineType ? (
-                    <span>{restaurant.cuisineType}</span>
+              return (
+                <Link
+                  key={restaurant.id}
+                  href={`/restaurants/${restaurant.slug}`}
+                  className="group flex flex-col overflow-hidden rounded-xl border border-zinc-200/90 bg-white transition hover:border-amber-300 hover:shadow-md"
+                >
+                  {coverUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={coverUrl}
+                      alt=""
+                      className="h-44 w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                      loading="lazy"
+                    />
                   ) : null}
-                  {restaurant.location ? (
-                    <span className="inline-flex items-center gap-1">
-                      <MapPin className="h-3 w-3" aria-hidden="true" />
-                      {restaurant.location}
-                    </span>
-                  ) : null}
-                </div>
+                  <div className="flex flex-1 flex-col p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <h2 className="font-serif text-xl font-medium leading-snug text-zinc-900 group-hover:text-amber-800">
+                        {restaurant.name}
+                      </h2>
+                      <UtensilsCrossed
+                        className="mt-1 h-4 w-4 shrink-0 text-amber-700"
+                        aria-hidden="true"
+                      />
+                    </div>
 
-                {restaurant.description ? (
-                  <p className="mt-3 line-clamp-3 flex-1 text-sm leading-6 text-zinc-600">
-                    {restaurant.description}
-                  </p>
-                ) : (
-                  <div className="flex-1" />
-                )}
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+                      {restaurant.cuisineType ? (
+                        <span>{restaurant.cuisineType}</span>
+                      ) : null}
+                      {restaurant.location ? (
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin className="h-3 w-3" aria-hidden="true" />
+                          {restaurant.location}
+                        </span>
+                      ) : null}
+                    </div>
 
-                <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-3 text-xs">
-                  <span className="text-zinc-500">
-                    {publishedMenuCount === 0
-                      ? "Menu coming soon"
-                      : `${publishedMenuCount} published menu${publishedMenuCount === 1 ? "" : "s"}`}
-                  </span>
-                  <span className="inline-flex items-center gap-1 font-medium text-amber-700">
-                    View
-                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                  </span>
-                </div>
-              </Link>
-            ))}
+                    {restaurant.description ? (
+                      <p className="mt-3 line-clamp-3 flex-1 text-sm leading-6 text-zinc-600">
+                        {restaurant.description}
+                      </p>
+                    ) : (
+                      <div className="flex-1" />
+                    )}
+
+                    <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-3 text-xs">
+                      <span className="text-zinc-500">
+                        {publishedMenuCount === 0
+                          ? "Menu coming soon"
+                          : `${publishedMenuCount} published menu${publishedMenuCount === 1 ? "" : "s"}`}
+                      </span>
+                      <span className="inline-flex items-center gap-1 font-medium text-amber-700">
+                        View
+                        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </section>

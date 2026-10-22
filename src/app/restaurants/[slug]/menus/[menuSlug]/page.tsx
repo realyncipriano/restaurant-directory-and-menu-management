@@ -115,7 +115,7 @@ export default async function PublicMenuPage({
               <UtensilsCrossed className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-zinc-900">
+              <h1 className="font-serif text-3xl font-medium tracking-tight text-zinc-900">
                 {menu.title}
               </h1>
               <p className="mt-1 text-sm text-zinc-500">
@@ -153,7 +153,7 @@ export default async function PublicMenuPage({
             {categories.map((category) => (
               <section key={category.id}>
                 <div className="border-b border-zinc-200 pb-3">
-                  <h2 className="text-xl font-semibold tracking-tight text-zinc-900">
+                  <h2 className="font-serif text-2xl font-medium tracking-tight text-zinc-900">
                     {category.name}
                   </h2>
                   {category.description ? (

@@ -1,4 +1,4 @@
-import { UtensilsCrossed } from "lucide-react";
+import { Cat } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -9,11 +9,11 @@ export async function SiteShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-zinc-200 bg-white">
+      <header className="border-b border-zinc-200 bg-zinc-50">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-600 text-white">
-              <UtensilsCrossed className="h-4 w-4" aria-hidden="true" />
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-600 text-white">
+              <Cat className="h-[18px] w-[18px]" strokeWidth={1.8} aria-hidden="true" />
             </span>
             <span>
               <span className="block text-sm font-semibold text-zinc-900">
@@ -33,7 +33,7 @@ export async function SiteShell({ children }: { children: ReactNode }) {
             </Link>
             <Link
               href="/login"
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+              className="rounded-lg border border-zinc-300 bg-white/70 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-400 hover:bg-white"
             >
               Staff sign in
             </Link>
@@ -43,7 +43,7 @@ export async function SiteShell({ children }: { children: ReactNode }) {
 
       <main className="flex-1">{children}</main>
 
-      <footer className="border-t border-zinc-200 bg-white">
+      <footer className="border-t border-zinc-200 bg-zinc-50">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <p>{settings.siteName}</p>
           <p>

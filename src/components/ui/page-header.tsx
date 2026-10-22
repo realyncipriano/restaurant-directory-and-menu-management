@@ -56,7 +56,7 @@ export function PageHeader({
               {icon}
             </span>
           ) : null}
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
+          <h1 className="font-serif text-3xl font-medium leading-tight tracking-tight text-zinc-900">
             {title}
           </h1>
         </div>

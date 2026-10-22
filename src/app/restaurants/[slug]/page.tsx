@@ -122,7 +122,7 @@ export default async function PublicRestaurantPage({
                 className="h-16 w-16 rounded-xl object-cover ring-1 ring-zinc-200"
               />
             ) : null}
-            <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 sm:text-4xl">
+            <h1 className="font-serif text-3xl font-medium tracking-tight text-zinc-900 sm:text-4xl">
               {restaurant.name}
             </h1>
             {restaurant.cuisineType ? (
@@ -212,7 +212,7 @@ export default async function PublicRestaurantPage({
                 <Link
                   key={menu.id}
                   href={`/restaurants/${restaurant.slug}/menus/${menu.slug}`}
-                  className="group flex items-start justify-between gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-amber-300 hover:shadow"
+                  className="group flex items-start justify-between gap-4 rounded-xl border border-zinc-200/90 bg-white p-5 transition hover:border-amber-300 hover:shadow-md"
                 >
                   <div>
                     <h3 className="text-base font-semibold text-zinc-900 group-hover:text-amber-800">

@@ -1,4 +1,4 @@
-import { LogOut, UtensilsCrossed } from "lucide-react";
+import { Cat, LogOut } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -29,8 +29,8 @@ export default async function DashboardLayout({
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
           <div className="flex items-center justify-between gap-4">
             <Link href="/dashboard" className="flex items-center gap-2.5">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-amber-500 to-amber-700 text-white shadow-sm">
-                <UtensilsCrossed className="h-5 w-5" aria-hidden="true" />
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-600 text-white shadow-sm">
+                <Cat className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
               </span>
               <span className="min-w-0">
                 <span className="block truncate text-sm font-semibold text-zinc-900">
