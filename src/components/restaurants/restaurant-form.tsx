@@ -63,60 +63,64 @@ export function RestaurantForm({
 
       {state.error ? <Notice tone="error">{state.error}</Notice> : null}
 
-      <section className="space-y-5">
+      <section className="space-y-4">
         <SectionHeading
           title="Basic details"
           description="The essentials visitors see in the directory and on the restaurant page."
         />
 
-        <Field
-          id="name"
-          label="Restaurant name"
-          note="Shown as the title in the public directory and on every menu page."
-          required
-          error={state.fieldErrors?.name?.[0]}
-        >
-          {(control) => (
-            <Input
-              {...control}
-              name="name"
-              type="text"
-              defaultValue={values.name ?? ""}
-              placeholder="Lola Maria's Kitchen"
-            />
-          )}
-        </Field>
-
-        <Field
-          id="slug"
-          label="URL slug"
-          note={
-            canEditSlug
-              ? "Lowercase letters, numbers, and hyphens. Leave blank to generate from the name. Changing it changes the public URL."
-              : "Only administrators can change the public URL."
-          }
-          error={state.fieldErrors?.slug?.[0]}
-        >
-          {(control) =>
-            canEditSlug ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field
+            id="name"
+            label="Restaurant name"
+            note="Shown as the title in the public directory and on every menu page."
+            noteLayout="below"
+            required
+            error={state.fieldErrors?.name?.[0]}
+          >
+            {(control) => (
               <Input
                 {...control}
-                name="slug"
+                name="name"
                 type="text"
-                defaultValue={values.slug ?? ""}
-                placeholder="lola-marias-kitchen"
-                pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                defaultValue={values.name ?? ""}
+                placeholder="Lola Maria's Kitchen"
               />
-            ) : (
-              <p
-                id={control.id}
-                className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 font-mono text-sm text-zinc-600"
-              >
-                /{values.slug}
-              </p>
-            )
-          }
-        </Field>
+            )}
+          </Field>
+
+          <Field
+            id="slug"
+            label="URL slug"
+            note={
+              canEditSlug
+                ? "Lowercase letters, numbers, and hyphens. Leave blank to generate from the name. Changing it changes the public URL."
+                : "Only administrators can change the public URL."
+            }
+            noteLayout="below"
+            error={state.fieldErrors?.slug?.[0]}
+          >
+            {(control) =>
+              canEditSlug ? (
+                <Input
+                  {...control}
+                  name="slug"
+                  type="text"
+                  defaultValue={values.slug ?? ""}
+                  placeholder="lola-marias-kitchen"
+                  pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                />
+              ) : (
+                <p
+                  id={control.id}
+                  className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 font-mono text-sm text-zinc-600"
+                >
+                  /{values.slug}
+                </p>
+              )
+            }
+          </Field>
+        </div>
 
         <Field
           id="description"
@@ -155,88 +159,96 @@ export function RestaurantForm({
 
       <div className="border-t border-zinc-100" />
 
-      <section className="space-y-5">
+      <section className="space-y-4">
         <SectionHeading
           title="Location"
           description="Help guests find the restaurant and understand which area it serves."
         />
 
-        <Field
-          id="location"
-          label="Area or city"
-          note="A short label shown on listing cards, such as the city or neighbourhood."
-          error={state.fieldErrors?.location?.[0]}
-        >
-          {(control) => (
-            <Input
-              {...control}
-              name="location"
-              type="text"
-              defaultValue={values.location ?? ""}
-              placeholder="Makati City"
-            />
-          )}
-        </Field>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field
+            id="location"
+            label="Area or city"
+            note="A short label shown on listing cards, such as the city or neighbourhood."
+            noteLayout="below"
+            error={state.fieldErrors?.location?.[0]}
+          >
+            {(control) => (
+              <Input
+                {...control}
+                name="location"
+                type="text"
+                defaultValue={values.location ?? ""}
+                placeholder="Makati City"
+              />
+            )}
+          </Field>
 
-        <Field
-          id="address"
-          label="Address"
-          note="Full street address shown on the public restaurant page."
-          error={state.fieldErrors?.address?.[0]}
-        >
-          {(control) => (
-            <Input
-              {...control}
-              name="address"
-              type="text"
-              defaultValue={values.address ?? ""}
-              placeholder="123 Ayala Avenue, Makati City"
-            />
-          )}
-        </Field>
+          <Field
+            id="address"
+            label="Address"
+            note="Full street address shown on the public restaurant page."
+            noteLayout="below"
+            error={state.fieldErrors?.address?.[0]}
+          >
+            {(control) => (
+              <Input
+                {...control}
+                name="address"
+                type="text"
+                defaultValue={values.address ?? ""}
+                placeholder="123 Ayala Avenue, Makati City"
+              />
+            )}
+          </Field>
+        </div>
       </section>
 
       <div className="border-t border-zinc-100" />
 
-      <section className="space-y-5">
+      <section className="space-y-4">
         <SectionHeading
           title="Contact and hours"
           description="Optional details visitors can use to reach the restaurant or plan a visit."
         />
 
-        <Field
-          id="contactPhone"
-          label="Contact phone"
-          note="Shown publicly so guests can call ahead. Include the area code."
-          error={state.fieldErrors?.contactPhone?.[0]}
-        >
-          {(control) => (
-            <Input
-              {...control}
-              name="contactPhone"
-              type="tel"
-              defaultValue={values.contactPhone ?? ""}
-              placeholder="+63 2 8123 4567"
-            />
-          )}
-        </Field>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field
+            id="contactPhone"
+            label="Contact phone"
+            note="Shown publicly so guests can call ahead. Include the area code."
+            noteLayout="below"
+            error={state.fieldErrors?.contactPhone?.[0]}
+          >
+            {(control) => (
+              <Input
+                {...control}
+                name="contactPhone"
+                type="tel"
+                defaultValue={values.contactPhone ?? ""}
+                placeholder="+63 2 8123 4567"
+              />
+            )}
+          </Field>
 
-        <Field
-          id="contactEmail"
-          label="Contact email"
-          note="Shown publicly for enquiries about this listing."
-          error={state.fieldErrors?.contactEmail?.[0]}
-        >
-          {(control) => (
-            <Input
-              {...control}
-              name="contactEmail"
-              type="email"
-              defaultValue={values.contactEmail ?? ""}
-              placeholder="hello@restaurant.ph"
-            />
-          )}
-        </Field>
+          <Field
+            id="contactEmail"
+            label="Contact email"
+            note="Shown publicly for enquiries about this listing."
+            noteLayout="below"
+            error={state.fieldErrors?.contactEmail?.[0]}
+          >
+            {(control) => (
+              <Input
+                {...control}
+                name="contactEmail"
+                type="email"
+                defaultValue={values.contactEmail ?? ""}
+                placeholder="hello@restaurant.ph"
+              />
+            )}
+          </Field>
+        </div>
 
         <Field
           id="operatingHours"

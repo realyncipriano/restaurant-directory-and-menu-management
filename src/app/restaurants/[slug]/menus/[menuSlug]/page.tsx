@@ -1,4 +1,4 @@
-import { UtensilsCrossed } from "lucide-react";
+import { ArrowUp, UtensilsCrossed } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -93,7 +93,7 @@ export default async function PublicMenuPage({
         }}
       />
 
-      <div className="border-b border-zinc-200 bg-white">
+      <div id="top" className="border-b border-zinc-200 bg-white">
         <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
           <nav className="flex flex-wrap items-center gap-1.5 text-sm text-zinc-500">
             <Link href="/" className="hover:text-zinc-800">
@@ -143,6 +143,25 @@ export default async function PublicMenuPage({
         </div>
       </div>
 
+      {categories.length > 1 ? (
+        <nav
+          aria-label="Menu categories"
+          className="sticky top-0 z-20 border-b border-zinc-200 bg-zinc-50/95 backdrop-blur"
+        >
+          <div className="mx-auto flex max-w-4xl gap-1 overflow-x-auto px-4 py-2 sm:px-6 [scrollbar-width:none]">
+            {categories.map((category) => (
+              <a
+                key={category.id}
+                href={`#category-${category.id}`}
+                className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-white hover:text-zinc-900 hover:ring-1 hover:ring-zinc-200"
+              >
+                {category.name}
+              </a>
+            ))}
+          </div>
+        </nav>
+      ) : null}
+
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
         {categories.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center text-sm text-zinc-500">
@@ -151,7 +170,11 @@ export default async function PublicMenuPage({
         ) : (
           <div className="space-y-10">
             {categories.map((category) => (
-              <section key={category.id}>
+              <section
+                key={category.id}
+                id={`category-${category.id}`}
+                className="scroll-mt-20"
+              >
                 <div className="border-b border-zinc-200 pb-3">
                   <h2 className="font-serif text-2xl font-medium tracking-tight text-zinc-900">
                     {category.name}
@@ -253,6 +276,16 @@ export default async function PublicMenuPage({
           Prices and availability are supplied by the restaurant and may change.
           Confirm details with {restaurant.name} before ordering.
         </p>
+
+        <div className="mt-6 text-center">
+          <a
+            href="#top"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 transition hover:text-zinc-800"
+          >
+            <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+            Back to top
+          </a>
+        </div>
       </div>
     </SiteShell>
   );

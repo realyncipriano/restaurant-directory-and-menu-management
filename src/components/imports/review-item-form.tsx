@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { ChevronDown } from "lucide-react";
 
 import { updateImportItemAction } from "@/app/dashboard/restaurants/[id]/imports/actions";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +62,9 @@ export function ImportItemReviewForm({
   );
   const decided = item.decision !== "pending";
   const lowConfidence = (item.confidence ?? 0) < 70;
+  const hasErrors =
+    Boolean(state.error) ||
+    Object.keys(state.fieldErrors ?? {}).length > 0;
 
   const decisionStyles =
     item.decision === "accept"
@@ -86,6 +90,7 @@ export function ImportItemReviewForm({
         <Badge tone={lowConfidence ? "danger" : "success"}>
           {item.confidence ?? "?"}% confidence
         </Badge>
+        {item.needsReview ? <Badge tone="warning">Needs review</Badge> : null}
         {item.pageNumber ? (
           <span className="text-zinc-400">Page {item.pageNumber}</span>
         ) : null}
@@ -108,118 +113,150 @@ export function ImportItemReviewForm({
         </Badge>
       </div>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <Field
-          id={`review-category-${item.id}`}
-          label="Category"
-          note="Groups this item on the menu."
-          noteLayout="below"
-          required
-          error={state.fieldErrors?.categoryName?.[0]}
-        >
-          {(control) => (
-            <Input
-              {...control}
-              name="categoryName"
-              defaultValue={item.categoryName}
-              maxLength={120}
-            />
-          )}
-        </Field>
-        <Field
-          id={`review-name-${item.id}`}
-          label="Item name"
-          note="Shown to guests on the public menu."
-          noteLayout="below"
-          required
-          error={state.fieldErrors?.name?.[0]}
-        >
-          {(control) => (
-            <Input
-              {...control}
-              name="name"
-              defaultValue={item.name}
-              maxLength={160}
-            />
-          )}
-        </Field>
-        <Field
-          id={`review-description-${item.id}`}
-          label="Description"
-          note="Optional details from the scan. Edit anything that looks misread."
-          noteLayout="below"
-          optional
-          error={state.fieldErrors?.description?.[0]}
-          className="sm:col-span-2"
-        >
-          {(control) => (
-            <Textarea
-              {...control}
-              name="description"
-              defaultValue={item.description ?? ""}
-              rows={2}
-            />
-          )}
-        </Field>
-        <Field
-          id={`review-price-${item.id}`}
-          label={`Base price (${item.currency})`}
-          note="Leave blank when every serving has its own variant price."
-          noteLayout="below"
-          error={state.fieldErrors?.basePrice?.[0]}
-        >
-          {(control) => (
-            <Input
-              {...control}
-              name="basePrice"
-              defaultValue={formatMinorForInput(item.basePriceMinor)}
-              inputMode="decimal"
-              placeholder="e.g. 185.00"
-            />
-          )}
-        </Field>
-        <Field
-          id={`review-availability-${item.id}`}
-          label="Availability"
-          note="Unavailable items stay listed but are marked to guests."
-          noteLayout="below"
-          error={state.fieldErrors?.availabilityStatus?.[0]}
-        >
-          {(control) => (
-            <Select
-              {...control}
-              name="availabilityStatus"
-              defaultValue={item.availabilityStatus}
-            >
-              <option value="available">Available</option>
-              <option value="unavailable">Unavailable</option>
-            </Select>
-          )}
-        </Field>
+      <div className="mt-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-zinc-900">
+            {item.name || "Untitled item"}
+          </p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            {item.categoryName}
+            <span className="text-zinc-300"> · </span>
+            {item.basePriceMinor !== null
+              ? formatPrice(item.basePriceMinor, item.currency)
+              : item.variants.length > 0
+                ? "Varies"
+                : "No price"}
+          </p>
+        </div>
       </div>
 
-      {item.variants.length > 0 ? (
-        <p className="mt-3 text-xs text-zinc-500">
-          Variants:{" "}
-          {item.variants
-            .map(
-              (variant) =>
-                `${variant.name} ${formatPrice(variant.priceMinor, item.currency)}`,
-            )
-            .join(" · ")}
-        </p>
-      ) : null}
-      {item.modifiers.length > 0 ? (
-        <p className="mt-1 text-xs text-zinc-400">
-          Add-ons:{" "}
-          {item.modifiers
-            .map(
-              (modifier) =>
-                `${modifier.name} +${formatPrice(modifier.additionalPriceMinor, item.currency)}`,
-            )
-            .join(" · ")}
-        </p>
-      ) : null}
+      <details
+        open={(item.needsReview && item.decision === "pending") || hasErrors}
+        className="group mt-3"
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50/70 px-3 py-2 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 [&::-webkit-details-marker]:hidden">
+          <span>
+            {item.needsReview ? "Review extracted fields" : "Edit fields"}
+          </span>
+          <ChevronDown
+            className="h-3.5 w-3.5 shrink-0 text-zinc-400 transition group-open:rotate-180"
+            aria-hidden="true"
+          />
+        </summary>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Field
+            id={`review-category-${item.id}`}
+            label="Category"
+            note="Groups this item on the menu."
+            noteLayout="below"
+            required
+            error={state.fieldErrors?.categoryName?.[0]}
+          >
+            {(control) => (
+              <Input
+                {...control}
+                name="categoryName"
+                defaultValue={item.categoryName}
+                maxLength={120}
+              />
+            )}
+          </Field>
+          <Field
+            id={`review-name-${item.id}`}
+            label="Item name"
+            note="Shown to guests on the public menu."
+            noteLayout="below"
+            required
+            error={state.fieldErrors?.name?.[0]}
+          >
+            {(control) => (
+              <Input
+                {...control}
+                name="name"
+                defaultValue={item.name}
+                maxLength={160}
+              />
+            )}
+          </Field>
+          <Field
+            id={`review-description-${item.id}`}
+            label="Description"
+            note="Optional details from the scan. Edit anything that looks misread."
+            noteLayout="below"
+            optional
+            error={state.fieldErrors?.description?.[0]}
+            className="sm:col-span-2"
+          >
+            {(control) => (
+              <Textarea
+                {...control}
+                name="description"
+                defaultValue={item.description ?? ""}
+                rows={2}
+              />
+            )}
+          </Field>
+          <Field
+            id={`review-price-${item.id}`}
+            label={`Base price (${item.currency})`}
+            note="Leave blank when every serving has its own variant price."
+            noteLayout="below"
+            error={state.fieldErrors?.basePrice?.[0]}
+          >
+            {(control) => (
+              <Input
+                {...control}
+                name="basePrice"
+                defaultValue={formatMinorForInput(item.basePriceMinor)}
+                inputMode="decimal"
+                placeholder="e.g. 185.00"
+              />
+            )}
+          </Field>
+          <Field
+            id={`review-availability-${item.id}`}
+            label="Availability"
+            note="Unavailable items stay listed but are marked to guests."
+            noteLayout="below"
+            error={state.fieldErrors?.availabilityStatus?.[0]}
+          >
+            {(control) => (
+              <Select
+                {...control}
+                name="availabilityStatus"
+                defaultValue={item.availabilityStatus}
+              >
+                <option value="available">Available</option>
+                <option value="unavailable">Unavailable</option>
+              </Select>
+            )}
+          </Field>
+        </div>
+
+        {item.variants.length > 0 ? (
+          <p className="mt-3 text-xs text-zinc-500">
+            Variants:{" "}
+            {item.variants
+              .map(
+                (variant) =>
+                  `${variant.name} ${formatPrice(variant.priceMinor, item.currency)}`,
+              )
+              .join(" · ")}
+          </p>
+        ) : null}
+        {item.modifiers.length > 0 ? (
+          <p className="mt-1 text-xs text-zinc-400">
+            Add-ons:{" "}
+            {item.modifiers
+              .map(
+                (modifier) =>
+                  `${modifier.name} +${formatPrice(modifier.additionalPriceMinor, item.currency)}`,
+              )
+              .join(" · ")}
+          </p>
+        ) : null}
+      </details>
 
       {state.error ? (
         <Notice tone="error" className="mt-3">

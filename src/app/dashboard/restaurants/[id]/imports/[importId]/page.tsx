@@ -98,23 +98,25 @@ export default async function MenuImportReviewPage({
     }
   }
 
-  const reviewItems: ReviewItem[] = items.map((item) => ({
-    id: item.id,
-    pageNumber: item.pageNumber,
-    categoryName: item.categoryName,
-    name: item.name,
-    description: item.description,
-    basePriceMinor: item.basePriceMinor,
-    currency: item.currency,
-    variants: item.variants,
-    modifiers: item.modifiers,
-    availabilityStatus: item.availabilityStatus,
-    confidence: item.confidence,
-    needsReview: item.needsReview,
-    changeType: item.changeType,
-    decision: item.decision,
-    duplicateName: duplicateNames.get(item.id) ?? null,
-  }));
+  const reviewItems: ReviewItem[] = items
+    .map((item) => ({
+      id: item.id,
+      pageNumber: item.pageNumber,
+      categoryName: item.categoryName,
+      name: item.name,
+      description: item.description,
+      basePriceMinor: item.basePriceMinor,
+      currency: item.currency,
+      variants: item.variants,
+      modifiers: item.modifiers,
+      availabilityStatus: item.availabilityStatus,
+      confidence: item.confidence,
+      needsReview: item.needsReview,
+      changeType: item.changeType,
+      decision: item.decision,
+      duplicateName: duplicateNames.get(item.id) ?? null,
+    }))
+    .sort((left, right) => Number(right.needsReview) - Number(left.needsReview));
 
   const stats = [
     { label: "Extracted", value: items.length },
@@ -212,7 +214,7 @@ export default async function MenuImportReviewPage({
           </CardBody>
         </Card>
 
-        <Card className="h-fit">
+        <Card className="h-fit lg:sticky lg:top-24">
           <CardBody className="space-y-5">
             <div>
               <h2 className="text-sm font-semibold text-zinc-900">

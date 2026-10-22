@@ -25,11 +25,7 @@ import { MenuForm } from "@/components/menus/menu-form";
 import { PublishMenuForm } from "@/components/menus/publish-form";
 import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
-import {
-  Card,
-  CardBody,
-  CardSectionTitle,
-} from "@/components/ui/card";
+import { Card, CardBody } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireCurrentUser } from "@/lib/auth/guards";
@@ -64,7 +60,11 @@ function MenuTreeView({ tree }: { tree: MenuTree }) {
   return (
     <div className="space-y-5">
       {tree.categories.map((category) => (
-        <section key={category.id}>
+        <section
+          key={category.id}
+          id={`category-${category.id}`}
+          className="scroll-mt-6 lg:scroll-mt-28"
+        >
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="text-sm font-semibold text-zinc-900">
               {category.name}
@@ -234,6 +234,31 @@ export default async function MenuEditorPage({
         </Notice>
       ) : null}
 
+      {tree.categories.length > 0 ? (
+        <nav
+          aria-label="Jump to menu category"
+          className="rounded-xl border border-zinc-200 bg-white/90 p-2 shadow-sm lg:sticky lg:top-[4.5rem] lg:z-20 lg:backdrop-blur"
+        >
+          <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
+            <span className="shrink-0 px-2 text-[11px] font-medium uppercase tracking-wide text-zinc-400">
+              Jump to
+            </span>
+            {tree.categories.map((category) => (
+              <a
+                key={category.id}
+                href={`#category-${category.id}`}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
+              >
+                {category.name}
+                <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                  {category.items.length}
+                </span>
+              </a>
+            ))}
+          </div>
+        </nav>
+      ) : null}
+
       {!isDraft ? (
         <Card>
           <CardBody>
@@ -300,39 +325,58 @@ export default async function MenuEditorPage({
           ) : null}
 
           <div className="space-y-4">
-            {tree.categories.map((category) => (
-              <Card key={category.id}>
-                <CardBody>
-                  <CardSectionTitle
-                    title={category.name}
-                    description={`Sort ${category.sortOrder} · ${category.items.length} item${
-                      category.items.length === 1 ? "" : "s"
-                    }${category.description ? ` · ${category.description}` : ""}`}
-                    action={
-                      canEdit ? (
-                        <details className="w-full sm:w-auto">
-                          <summary className="cursor-pointer text-xs font-medium text-zinc-600 hover:text-zinc-900">
-                            Edit category
-                          </summary>
-                          <div className="mt-3 w-full rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:w-96">
-                            <CategoryForm
-                              mode="edit"
-                              restaurantId={restaurant.id}
-                              menuId={menu.id}
-                              category={{
-                                id: category.id,
-                                name: category.name,
-                                description: category.description,
-                                sortOrder: category.sortOrder,
-                              }}
-                            />
-                          </div>
-                        </details>
-                      ) : null
-                    }
-                  />
+            {tree.categories.map((category, index) => (
+              <details
+                key={category.id}
+                id={`category-${category.id}`}
+                open={index === 0}
+                className="group scroll-mt-6 overflow-hidden rounded-xl border border-zinc-200/90 bg-white shadow-[0_1px_2px_rgba(42,34,25,0.04)] lg:scroll-mt-28"
+              >
+                <summary className="flex cursor-pointer list-none flex-col gap-2 px-5 py-4 [&::-webkit-details-marker]:hidden sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-zinc-900">
+                      {category.name}
+                    </h2>
+                    <p className="mt-1 text-xs leading-5 text-zinc-500">
+                      Sort {category.sortOrder} · {category.items.length} item
+                      {category.items.length === 1 ? "" : "s"}
+                      {category.description
+                        ? ` · ${category.description}`
+                        : ""}
+                    </p>
+                  </div>
+                  <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-zinc-500">
+                    Items
+                    <ChevronDown
+                      className="h-3.5 w-3.5 transition group-open:rotate-180"
+                      aria-hidden="true"
+                    />
+                  </span>
+                </summary>
 
-                  <div className="mt-4 space-y-2">
+                <div className="border-t border-zinc-100 px-5 py-4">
+                  {canEdit ? (
+                    <details className="mb-4">
+                      <summary className="cursor-pointer text-xs font-medium text-zinc-600 hover:text-zinc-900">
+                        Edit category
+                      </summary>
+                      <div className="mt-3 w-full rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:w-96">
+                        <CategoryForm
+                          mode="edit"
+                          restaurantId={restaurant.id}
+                          menuId={menu.id}
+                          category={{
+                            id: category.id,
+                            name: category.name,
+                            description: category.description,
+                            sortOrder: category.sortOrder,
+                          }}
+                        />
+                      </div>
+                    </details>
+                  ) : null}
+
+                  <div className="space-y-2">
                     {category.items.map((item) => (
                       <details
                         key={item.id}
@@ -471,8 +515,8 @@ export default async function MenuEditorPage({
                       </details>
                     ) : null}
                   </div>
-                </CardBody>
-              </Card>
+                </div>
+              </details>
             ))}
           </div>
 
