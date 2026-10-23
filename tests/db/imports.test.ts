@@ -12,12 +12,14 @@ import {
   menus,
 } from "@/db/schema";
 import {
+  ConflictError,
   ForbiddenError,
   NotFoundError,
   ValidationError,
 } from "@/lib/errors";
 import type { ItemInput } from "@/lib/validation/menu";
 import {
+  acceptAllImportItems,
   applyMenuImport,
   keepOnlyImportCategory,
   updateImportCategoryDecision,
@@ -657,6 +659,54 @@ describe("menu import application (ephemeral PGlite)", () => {
     );
     expect(byCategory.get("Coffee")).toBe("reject");
     expect(byCategory.get("Non-coffee")).toBe("accept");
+  });
+
+  it("rejects review mutations and repeated applies after an import is applied", async () => {
+    const { admin, record } = await setup();
+    const staged = await stageItem(record.id, {
+      categoryName: "Desserts",
+      name: "Leche Flan",
+      basePriceMinor: 9000,
+    });
+
+    await acceptAllImportItems(db, admin.id, record.id);
+    await applyMenuImport(db, admin.id, record.id);
+
+    const editInput = {
+      decision: "reject" as const,
+      categoryName: "Desserts",
+      name: "Leche Flan",
+      basePrice: "90.00",
+      availabilityStatus: "available" as const,
+    };
+
+    await expect(
+      updateImportItem(db, admin.id, record.id, staged.id, editInput),
+    ).rejects.toBeInstanceOf(ConflictError);
+    await expect(
+      acceptAllImportItems(db, admin.id, record.id),
+    ).rejects.toBeInstanceOf(ConflictError);
+    await expect(
+      updateImportCategoryDecision(db, admin.id, record.id, "Desserts", "reject"),
+    ).rejects.toBeInstanceOf(ConflictError);
+    await expect(
+      keepOnlyImportCategory(db, admin.id, record.id, "Desserts"),
+    ).rejects.toBeInstanceOf(ConflictError);
+    await expect(
+      applyMenuImport(db, admin.id, record.id),
+    ).rejects.toBeInstanceOf(ConflictError);
+
+    const appliedItems = await db
+      .select()
+      .from(menuItems)
+      .where(eq(menuItems.name, "Leche Flan"));
+    expect(appliedItems).toHaveLength(1);
+
+    const [decisions] = await db
+      .select()
+      .from(menuImportItems)
+      .where(eq(menuImportItems.id, staged.id));
+    expect(decisions?.decision).toBe("accept");
   });
 
   it("requires edit permission to review or apply", async () => {

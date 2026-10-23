@@ -17,6 +17,7 @@ import {
   ForbiddenError,
   NotFoundError,
 } from "@/lib/errors";
+import { slugWithSuffix, slugify } from "@/lib/slug";
 import { parseOrThrow } from "@/lib/validation/parse";
 import {
   permissionUpdateSchema,
@@ -43,18 +44,6 @@ export type AssignableUser = {
   flags: RestaurantPermissionFlags;
 };
 
-function slugify(value: string): string {
-  return (
-    value
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 80) || "restaurant"
-  );
-}
-
 async function slugTaken(
   db: DbExecutor,
   slug: string,
@@ -76,11 +65,11 @@ async function uniqueSlug(
   db: DbExecutor,
   desired: string,
 ): Promise<string> {
-  const base = slugify(desired);
+  const base = slugify(desired, "restaurant");
   if (!(await slugTaken(db, base))) return base;
 
   for (let suffix = 2; suffix <= 99; suffix += 1) {
-    const candidate = `${base.slice(0, 80 - String(suffix).length - 1)}-${suffix}`;
+    const candidate = slugWithSuffix(base, suffix);
     if (!(await slugTaken(db, candidate))) return candidate;
   }
 

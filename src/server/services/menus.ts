@@ -27,13 +27,14 @@ import {
   NotFoundError,
   ValidationError,
 } from "@/lib/errors";
+import { slugWithSuffix, slugify } from "@/lib/slug";
 import { parseOrThrow } from "@/lib/validation/parse";
 import { menuInputSchema } from "@/lib/validation/menu";
 import { writeAuditLog } from "./audit";
+import { diffMenuTrees } from "./menu-diff";
 import {
   loadMenuTree,
   type MenuRecord,
-  type MenuTreeItem,
 } from "./menu-tree";
 import {
   getMenuAccess,
@@ -70,28 +71,16 @@ async function menuSlugTaken(
   return Boolean(row);
 }
 
-function slugifyTitle(value: string): string {
-  return (
-    value
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 80) || "menu"
-  );
-}
-
 async function uniqueMenuSlug(
   db: DbExecutor,
   restaurantId: string,
   title: string,
 ): Promise<string> {
-  const base = slugifyTitle(title);
+  const base = slugify(title, "menu");
   if (!(await menuSlugTaken(db, restaurantId, base))) return base;
 
   for (let suffix = 2; suffix <= 99; suffix += 1) {
-    const candidate = `${base.slice(0, 80 - String(suffix).length - 1)}-${suffix}`;
+    const candidate = slugWithSuffix(base, suffix);
     if (!(await menuSlugTaken(db, restaurantId, candidate))) {
       return candidate;
     }
@@ -570,32 +559,6 @@ export async function discardDraft(
   });
 }
 
-function itemSnapshot(item: MenuTreeItem) {
-  return {
-    name: item.name,
-    description: item.description,
-    basePriceMinor: item.basePriceMinor,
-    availabilityStatus: item.availabilityStatus,
-    variants: [...item.variants]
-      .map((variant) => ({
-        name: variant.name,
-        priceMinor: variant.priceMinor,
-      }))
-      .sort((left, right) => left.name.localeCompare(right.name)),
-    modifiers: [...item.modifiers]
-      .map((modifier) => ({
-        name: modifier.name,
-        additionalPriceMinor: modifier.additionalPriceMinor,
-        isAvailable: modifier.isAvailable,
-      }))
-      .sort((left, right) => left.name.localeCompare(right.name)),
-  };
-}
-
-function snapshotsEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
 async function writeChange(
   db: DbExecutor,
   input: {
@@ -760,191 +723,21 @@ export async function publishMenu(
       createdAt: now,
     });
 
-    const previousItems = new Map(
-      (previousTree?.categories.flatMap((category) => category.items) ?? []).map(
-        (item) => [item.logicalId, item] as const,
-      ),
-    );
-    const newItems = new Map(
-      allItems.map((item) => [item.logicalId, item] as const),
-    );
-
-    for (const item of allItems) {
-      const previousItem = previousItems.get(item.logicalId);
-      if (!previousItem) {
-        await writeChange(tx, {
+    const changes = diffMenuTrees(previousTree, tree);
+    if (changes.length > 0) {
+      await tx.insert(menuChangeLogs).values(
+        changes.map((change) => ({
           restaurantId: published.restaurantId,
           menuId: published.id,
-          logicalId: item.logicalId,
-          itemId: item.id,
-          action: "item_created",
-          newValues: itemSnapshot(item),
-          actorId: access.actor.id,
+          menuItemLogicalId: change.logicalId,
+          menuItemId: change.itemId,
+          action: change.action,
+          previousValues: change.previousValues ?? null,
+          newValues: change.newValues ?? null,
+          changedBy: access.actor.id,
           createdAt: now,
-        });
-        continue;
-      }
-
-      const before = itemSnapshot(previousItem);
-      const after = itemSnapshot(item);
-
-      if (before.name !== after.name) {
-        await writeChange(tx, {
-          restaurantId: published.restaurantId,
-          menuId: published.id,
-          logicalId: item.logicalId,
-          itemId: item.id,
-          action: "item_updated",
-          previousValues: { name: before.name },
-          newValues: { name: after.name },
-          actorId: access.actor.id,
-          createdAt: now,
-        });
-      }
-
-      if (before.description !== after.description) {
-        await writeChange(tx, {
-          restaurantId: published.restaurantId,
-          menuId: published.id,
-          logicalId: item.logicalId,
-          itemId: item.id,
-          action: "item_updated",
-          previousValues: { description: before.description },
-          newValues: { description: after.description },
-          actorId: access.actor.id,
-          createdAt: now,
-        });
-      }
-
-      if (
-        before.basePriceMinor !== after.basePriceMinor ||
-        !snapshotsEqual(before.variants, after.variants) ||
-        !snapshotsEqual(before.modifiers, after.modifiers)
-      ) {
-        await writeChange(tx, {
-          restaurantId: published.restaurantId,
-          menuId: published.id,
-          logicalId: item.logicalId,
-          itemId: item.id,
-          action: "price_changed",
-          previousValues: {
-            basePriceMinor: before.basePriceMinor,
-            variants: before.variants,
-            modifiers: before.modifiers,
-          },
-          newValues: {
-            basePriceMinor: after.basePriceMinor,
-            variants: after.variants,
-            modifiers: after.modifiers,
-          },
-          actorId: access.actor.id,
-          createdAt: now,
-        });
-      }
-
-      if (before.availabilityStatus !== after.availabilityStatus) {
-        await writeChange(tx, {
-          restaurantId: published.restaurantId,
-          menuId: published.id,
-          logicalId: item.logicalId,
-          itemId: item.id,
-          action: "item_availability_changed",
-          previousValues: {
-            availabilityStatus: before.availabilityStatus,
-          },
-          newValues: { availabilityStatus: after.availabilityStatus },
-          actorId: access.actor.id,
-          createdAt: now,
-        });
-      }
-    }
-
-    for (const [logicalId, item] of previousItems) {
-      if (newItems.has(logicalId)) continue;
-      await writeChange(tx, {
-        restaurantId: published.restaurantId,
-        menuId: published.id,
-        logicalId,
-        itemId: null,
-        action: "item_deleted",
-        previousValues: itemSnapshot(item),
-        actorId: access.actor.id,
-        createdAt: now,
-      });
-    }
-
-    const previousCategories = new Map(
-      (previousTree?.categories ?? []).map(
-        (category) => [category.name.toLowerCase(), category] as const,
-      ),
-    );
-    const newCategories = new Map(
-      tree.categories.map(
-        (category) => [category.name.toLowerCase(), category] as const,
-      ),
-    );
-
-    for (const category of tree.categories) {
-      const previousCategory = previousCategories.get(
-        category.name.toLowerCase(),
+        })),
       );
-      if (!previousCategory) {
-        await writeChange(tx, {
-          restaurantId: published.restaurantId,
-          menuId: published.id,
-          logicalId: null,
-          itemId: null,
-          action: "category_created",
-          newValues: {
-            name: category.name,
-            description: category.description,
-            sortOrder: category.sortOrder,
-          },
-          actorId: access.actor.id,
-          createdAt: now,
-        });
-      } else if (
-        previousCategory.description !== category.description ||
-        previousCategory.sortOrder !== category.sortOrder
-      ) {
-        await writeChange(tx, {
-          restaurantId: published.restaurantId,
-          menuId: published.id,
-          logicalId: null,
-          itemId: null,
-          action: "category_updated",
-          previousValues: {
-            name: previousCategory.name,
-            description: previousCategory.description,
-            sortOrder: previousCategory.sortOrder,
-          },
-          newValues: {
-            name: category.name,
-            description: category.description,
-            sortOrder: category.sortOrder,
-          },
-          actorId: access.actor.id,
-          createdAt: now,
-        });
-      }
-    }
-
-    for (const [name, category] of previousCategories) {
-      if (newCategories.has(name)) continue;
-      await writeChange(tx, {
-        restaurantId: published.restaurantId,
-        menuId: published.id,
-        logicalId: null,
-        itemId: null,
-        action: "category_deleted",
-        previousValues: {
-          name: category.name,
-          description: category.description,
-          sortOrder: category.sortOrder,
-        },
-        actorId: access.actor.id,
-        createdAt: now,
-      });
     }
 
     await writeAuditLog(tx, {

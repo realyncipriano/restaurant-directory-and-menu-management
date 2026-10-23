@@ -12,8 +12,6 @@ import {
   menuImportItems,
   menuImportPages,
   menuImports,
-  menuItemModifiers,
-  menuItemVariants,
   menuItems,
   menus,
 } from "@/db/schema";
@@ -33,6 +31,14 @@ import {
   lockDraftMenu,
   requireDraftEditable,
 } from "./menu-access";
+import {
+  buildChangeType,
+  isAcceptableImportItem,
+  normalizeName,
+  shouldStayPendingOnKeepOnly,
+  type ImportItemRow,
+} from "./import-rules";
+import { replaceItemVariantsAndModifiers } from "./menu-item-details";
 import { requireRestaurantPermission } from "./restaurant-access";
 import {
   loadMenuTree,
@@ -58,97 +64,6 @@ const ALLOWED_SOURCE_MIME = new Map([
   ["image/png", "png"],
   ["image/webp", "webp"],
 ]);
-
-function normalizeName(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function itemPriceKey(item: MenuTreeItem): string {
-  return JSON.stringify({
-    base: item.basePriceMinor,
-    variants: item.variants.map((variant) => [
-      normalizeName(variant.name),
-      variant.priceMinor,
-    ]),
-  });
-}
-
-type ImportItemRow = typeof menuImportItems.$inferSelect;
-
-function importItemHasPrice(item: ImportItemRow): boolean {
-  return (
-    item.basePriceMinor !== null ||
-    item.variants.some((variant) => variant.priceMinor !== null)
-  );
-}
-
-function isAcceptableImportItem(item: ImportItemRow): boolean {
-  return (
-    item.decision === "pending" &&
-    importItemHasPrice(item) &&
-    (item.confidence ?? 0) >= 70 &&
-    item.duplicateOfImportItemId === null
-  );
-}
-
-function shouldStayPendingOnKeepOnly(item: ImportItemRow): boolean {
-  return (
-    item.needsReview ||
-    (item.confidence ?? 0) < 70 ||
-    !importItemHasPrice(item) ||
-    item.duplicateOfImportItemId !== null
-  );
-}
-
-async function writeVariantsAndModifiers(
-  db: DbExecutor,
-  itemId: string,
-  variants: { name: string; priceMinor: number | null }[],
-  modifiers: {
-    name: string;
-    additionalPriceMinor: number | null;
-    isAvailable: boolean;
-  }[],
-  now: Date,
-): Promise<void> {
-  const pricedVariants = variants.filter(
-    (variant): variant is { name: string; priceMinor: number } =>
-      variant.priceMinor !== null && Boolean(variant.name.trim()),
-  );
-  await db
-    .delete(menuItemVariants)
-    .where(eq(menuItemVariants.menuItemId, itemId));
-  if (pricedVariants.length > 0) {
-    await db.insert(menuItemVariants).values(
-      pricedVariants.map((variant, index) => ({
-        menuItemId: itemId,
-        name: variant.name,
-        priceMinor: variant.priceMinor,
-        sortOrder: index,
-        createdAt: now,
-      })),
-    );
-  }
-
-  const namedModifiers = modifiers.filter((modifier) =>
-    Boolean(modifier.name.trim()),
-  );
-  await db
-    .delete(menuItemModifiers)
-    .where(eq(menuItemModifiers.menuItemId, itemId));
-  if (namedModifiers.length > 0) {
-    await db.insert(menuItemModifiers).values(
-      namedModifiers.map((modifier, index) => ({
-        menuItemId: itemId,
-        name: modifier.name,
-        additionalPriceMinor: modifier.additionalPriceMinor ?? 0,
-        isAvailable: modifier.isAvailable,
-        sortOrder: index,
-        createdAt: now,
-      })),
-    );
-  }
-}
 
 export type ImportUploadFile = {
   name: string;
@@ -431,47 +346,6 @@ export async function getMenuImport(
   };
 }
 
-async function buildChangeType(
-  extracted: {
-    name: string;
-    description: string | null;
-    basePriceMinor: number | null;
-    variants: { name: string; priceMinor: number | null }[];
-    availabilityStatus: "available" | "unavailable";
-  },
-  existing: MenuTreeItem | undefined,
-): Promise<
-  | "new"
-  | "price_changed"
-  | "description_changed"
-  | "availability_changed"
-  | "unchanged"
-> {
-  if (!existing) return "new";
-
-  const priceChanged =
-    existing.basePriceMinor !== extracted.basePriceMinor ||
-    itemPriceKey(existing) !==
-      JSON.stringify({
-        base: extracted.basePriceMinor,
-        variants: extracted.variants
-          .filter((variant) => variant.priceMinor !== null)
-          .map((variant) => [
-            normalizeName(variant.name),
-            variant.priceMinor,
-          ]),
-      });
-
-  if (priceChanged) return "price_changed";
-  if ((existing.description ?? null) !== extracted.description) {
-    return "description_changed";
-  }
-  if (existing.availabilityStatus !== extracted.availabilityStatus) {
-    return "availability_changed";
-  }
-  return "unchanged";
-}
-
 export async function processMenuImport(
   db: DbClient,
   actorId: string,
@@ -630,7 +504,7 @@ export async function processMenuImport(
             `${normalizeName(item.categoryName)}|${key}`,
           ) ?? existingByName.get(key);
         const duplicateOf = firstByName.get(key) ?? null;
-        const changeType = await buildChangeType(item, existing);
+        const changeType = buildChangeType(item, existing);
         const pricedVariant = item.variants.some(
           (variant) => variant.priceMinor !== null,
         );
@@ -785,55 +659,59 @@ export async function updateImportItem(
 ): Promise<void> {
   const data = await getMenuImport(db, actorId, importId);
   await requireDraftEditable(db, actorId, data.menu.id);
-  if (
-    data.import.status !== "needs_review" &&
-    data.import.status !== "reviewed"
-  ) {
-    throw new ConflictError("This import is not ready for review.");
-  }
 
-  const [staged] = await db
-    .select()
-    .from(menuImportItems)
-    .where(
-      and(
-        eq(menuImportItems.id, itemId),
-        eq(menuImportItems.importId, importId),
-      ),
-    )
-    .limit(1);
-  if (!staged) throw new NotFoundError("Import item not found.");
+  await db.transaction(async (tx) => {
+    await lockImportForReview(tx, importId);
 
-  const categoryName = input.categoryName.trim();
-  const name = input.name.trim();
-  if (!categoryName || !name) {
-    throw new ValidationError("Category and item name are required.");
-  }
+    const [staged] = await tx
+      .select()
+      .from(menuImportItems)
+      .where(
+        and(
+          eq(menuImportItems.id, itemId),
+          eq(menuImportItems.importId, importId),
+        ),
+      )
+      .limit(1);
+    if (!staged) throw new NotFoundError("Import item not found.");
 
-  const price = parsePriceToMinor(input.basePrice ?? "");
-  if (!price.ok) {
-    throw new ValidationError(price.message, {
-      basePrice: [price.message],
-    });
-  }
+    const categoryName = input.categoryName.trim();
+    const name = input.name.trim();
+    if (!categoryName || !name) {
+      throw new ValidationError("Category and item name are required.");
+    }
 
-  await db
-    .update(menuImportItems)
-    .set({
-      decision: input.decision,
-      categoryName: categoryName.slice(0, 120),
-      name: name.slice(0, 160),
-      description: input.description?.trim() || null,
-      basePriceMinor: price.minor,
-      availabilityStatus: input.availabilityStatus,
-      updatedAt: new Date(),
-    })
-    .where(eq(menuImportItems.id, itemId));
+    const price = parsePriceToMinor(input.basePrice ?? "");
+    if (!price.ok) {
+      throw new ValidationError(price.message, {
+        basePrice: [price.message],
+      });
+    }
 
-  await db
-    .update(menuImports)
-    .set({ updatedAt: new Date() })
-    .where(eq(menuImports.id, importId));
+    const now = new Date();
+    await tx
+      .update(menuImportItems)
+      .set({
+        decision: input.decision,
+        categoryName: categoryName.slice(0, 120),
+        name: name.slice(0, 160),
+        description: input.description?.trim() || null,
+        basePriceMinor: price.minor,
+        availabilityStatus: input.availabilityStatus,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(menuImportItems.id, itemId),
+          eq(menuImportItems.importId, importId),
+        ),
+      );
+
+    await tx
+      .update(menuImports)
+      .set({ updatedAt: now })
+      .where(eq(menuImports.id, importId));
+  });
 }
 
 export async function acceptAllImportItems(
@@ -843,29 +721,31 @@ export async function acceptAllImportItems(
 ): Promise<void> {
   const data = await getMenuImport(db, actorId, importId);
   await requireDraftEditable(db, actorId, data.menu.id);
-  if (
-    data.import.status !== "needs_review" &&
-    data.import.status !== "reviewed"
-  ) {
-    throw new ConflictError("This import is not ready for review.");
-  }
 
-  const acceptedIds = data.items
-    .filter(isAcceptableImportItem)
-    .map((item) => item.id);
+  await db.transaction(async (tx) => {
+    await lockImportForReview(tx, importId);
 
-  if (acceptedIds.length === 0) return;
+    const items = await tx
+      .select()
+      .from(menuImportItems)
+      .where(eq(menuImportItems.importId, importId));
+    const acceptedIds = items
+      .filter(isAcceptableImportItem)
+      .map((item) => item.id);
 
-  await db
-    .update(menuImportItems)
-    .set({ decision: "accept", updatedAt: new Date() })
-    .where(
-      and(
-        eq(menuImportItems.importId, importId),
-        eq(menuImportItems.decision, "pending"),
-        inArray(menuImportItems.id, acceptedIds),
-      ),
-    );
+    if (acceptedIds.length === 0) return;
+
+    await tx
+      .update(menuImportItems)
+      .set({ decision: "accept", updatedAt: new Date() })
+      .where(
+        and(
+          eq(menuImportItems.importId, importId),
+          eq(menuImportItems.decision, "pending"),
+          inArray(menuImportItems.id, acceptedIds),
+        ),
+      );
+  });
 }
 
 export type ImportCategoryDecision = "accept" | "reject";
@@ -881,6 +761,7 @@ export type ImportCategoryDecisionResult = {
 async function lockImportForReview(
   tx: DbExecutor,
   importId: string,
+  conflictMessage = "This import is not ready for review.",
 ): Promise<void> {
   const [locked] = await tx
     .select({ id: menuImports.id, status: menuImports.status })
@@ -891,7 +772,7 @@ async function lockImportForReview(
 
   if (!locked) throw new NotFoundError("Import not found.");
   if (locked.status !== "needs_review" && locked.status !== "reviewed") {
-    throw new ConflictError("This import is not ready for review.");
+    throw new ConflictError(conflictMessage);
   }
 }
 
@@ -1066,43 +947,41 @@ export async function applyMenuImport(
     actorId,
     data.menu.id,
   );
-  if (
-    data.import.status !== "needs_review" &&
-    data.import.status !== "reviewed"
-  ) {
-    throw new ConflictError("This import is not ready to apply.");
-  }
-
-  const accepted = data.items.filter((item) => item.decision === "accept");
-  if (accepted.length === 0) {
-    throw new ValidationError(
-      "Accept at least one reviewed item before applying this import.",
-    );
-  }
-
-  for (const item of accepted) {
-    const pricedVariant = item.variants.some(
-      (variant) => variant.priceMinor !== null,
-    );
-    if (item.basePriceMinor === null && !pricedVariant) {
-      throw new ValidationError(
-        `“${item.name}” has no price. Edit it before applying.`,
-      );
-    }
-  }
-
   const now = new Date();
 
   await db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select({ status: menuImports.status })
-      .from(menuImports)
-      .where(eq(menuImports.id, importId))
-      .for("update")
-      .limit(1);
-    if (!locked) throw new NotFoundError("Import not found.");
-    if (locked.status !== "needs_review" && locked.status !== "reviewed") {
-      throw new ConflictError("This import is not ready to apply.");
+    await lockImportForReview(
+      tx,
+      importId,
+      "This import is not ready to apply.",
+    );
+
+    const accepted = await tx
+      .select()
+      .from(menuImportItems)
+      .where(
+        and(
+          eq(menuImportItems.importId, importId),
+          eq(menuImportItems.decision, "accept"),
+        ),
+      )
+      .orderBy(asc(menuImportItems.sortOrder), asc(menuImportItems.createdAt));
+
+    if (accepted.length === 0) {
+      throw new ValidationError(
+        "Accept at least one reviewed item before applying this import.",
+      );
+    }
+
+    for (const item of accepted) {
+      const pricedVariant = item.variants.some(
+        (variant) => variant.priceMinor !== null,
+      );
+      if (item.basePriceMinor === null && !pricedVariant) {
+        throw new ValidationError(
+          `“${item.name}” has no price. Edit it before applying.`,
+        );
+      }
     }
 
     await lockDraftMenu(tx, menu.id);
@@ -1169,11 +1048,10 @@ export async function applyMenuImport(
             updatedAt: now,
           })
           .where(eq(menuItems.id, existing.id));
-        await writeVariantsAndModifiers(
+        await replaceItemVariantsAndModifiers(
           tx,
           existing.id,
-          staged.variants,
-          staged.modifiers,
+          { variants: staged.variants, modifiers: staged.modifiers },
           now,
         );
         updated += 1;
@@ -1197,11 +1075,10 @@ export async function applyMenuImport(
           throw new ConflictError("Could not create an imported item.");
         }
         nextItemSortByCategory.set(category.id, sortOrder + 10);
-        await writeVariantsAndModifiers(
+        await replaceItemVariantsAndModifiers(
           tx,
           inserted.id,
-          staged.variants,
-          staged.modifiers,
+          { variants: staged.variants, modifiers: staged.modifiers },
           now,
         );
         created += 1;

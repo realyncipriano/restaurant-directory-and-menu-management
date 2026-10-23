@@ -313,6 +313,54 @@ describe("menu services (ephemeral PGlite)", () => {
     expect(management.versions).toHaveLength(2);
   });
 
+  it("validates normalized item input inside the service layer", async () => {
+    const { admin, restaurant } = await setup();
+    const menu = await createMenu(db, admin.id, restaurant.id, {
+      title: "Lunch",
+    });
+    const category = await createCategory(db, admin.id, menu.id, {
+      name: "Mains",
+    });
+
+    await expect(
+      createMenuItem(
+        db,
+        admin.id,
+        menu.id,
+        itemInput(category.id, { name: "   " }),
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      createMenuItem(
+        db,
+        admin.id,
+        menu.id,
+        itemInput(category.id, { basePrice: -1 }),
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    const created = await createMenuItem(
+      db,
+      admin.id,
+      menu.id,
+      itemInput(category.id),
+    );
+    await expect(
+      updateMenuItem(
+        db,
+        admin.id,
+        menu.id,
+        created.id,
+        itemInput(category.id, {
+          variants: [
+            { name: "Small", price: 1000 },
+            { name: "small", price: 2000 },
+          ],
+        }),
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
   it("enforces edit, publish, and view permissions", async () => {
     const { admin, editor, publisher, viewer, restaurant } = await setup();
     const menu = await createMenu(db, admin.id, restaurant.id, {

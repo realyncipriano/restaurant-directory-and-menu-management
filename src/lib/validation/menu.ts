@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { parsePriceToMinor } from "@/lib/money";
+import { MAX_PRICE_MINOR, parsePriceToMinor } from "@/lib/money";
 
 const optionalText = (max: number) =>
   z
@@ -8,6 +8,14 @@ const optionalText = (max: number) =>
     .trim()
     .max(max, `Must be ${max} characters or fewer.`)
     .optional()
+    .transform((value) => value || null);
+
+const normalizedOptionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max, `Must be ${max} characters or fewer.`)
+    .nullish()
     .transform((value) => value || null);
 
 const slugSchema = z
@@ -66,66 +74,133 @@ export const categoryInputSchema = z.object({
   sortOrder: sortOrderSchema,
 });
 
+const variantNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Enter a variant name.")
+  .max(120, "Variant name must be 120 characters or fewer.");
+
+const modifierNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Enter an add-on name.")
+  .max(120, "Add-on name must be 120 characters or fewer.");
+
+const itemNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Enter an item name.")
+  .max(160, "Item name must be 160 characters or fewer.");
+
+const baseMinorPriceSchema = z
+  .number()
+  .int("Price must be a whole number of cents.")
+  .min(0, "Price cannot be negative.")
+  .max(MAX_PRICE_MINOR, "That price is too large.")
+  .nullable();
+
+const requiredMinorPriceSchema = baseMinorPriceSchema.refine(
+  (value): value is number => value !== null,
+  "Enter a price.",
+);
+
 const variantSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, "Enter a variant name.")
-    .max(120, "Variant name must be 120 characters or fewer."),
+  name: variantNameSchema,
   price: requiredPriceSchema,
 });
 
 const modifierSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, "Enter an add-on name.")
-    .max(120, "Add-on name must be 120 characters or fewer."),
+  name: modifierNameSchema,
   price: priceInputSchema.transform((value) => value ?? 0),
   isAvailable: z.boolean().default(true),
 });
 
+const normalizedVariantSchema = z.object({
+  name: variantNameSchema,
+  price: requiredMinorPriceSchema,
+});
+
+const normalizedModifierSchema = z.object({
+  name: modifierNameSchema,
+  price: baseMinorPriceSchema.transform((value) => value ?? 0),
+  isAvailable: z.boolean().default(true),
+});
+
+function addDuplicateNameIssues(
+  values: { name: string }[],
+  path: "variants" | "modifiers",
+  message: string,
+  ctx: z.RefinementCtx,
+): void {
+  const names = new Set<string>();
+  values.forEach((value, index) => {
+    const key = value.name.toLowerCase();
+    if (names.has(key)) {
+      ctx.addIssue({
+        code: "custom",
+        message,
+        path: [path, index, "name"],
+      });
+    }
+    names.add(key);
+  });
+}
+
+const itemFields = {
+  categoryId: z.string().uuid("Choose a category."),
+  name: itemNameSchema,
+  description: optionalText(2000),
+  availabilityStatus: z.enum(["available", "unavailable"]),
+  sortOrder: sortOrderSchema,
+};
+
 export const itemInputSchema = z
   .object({
-    categoryId: z.string().uuid("Choose a category."),
-    name: z
-      .string()
-      .trim()
-      .min(1, "Enter an item name.")
-      .max(160, "Item name must be 160 characters or fewer."),
-    description: optionalText(2000),
+    ...itemFields,
     basePrice: priceInputSchema,
-    availabilityStatus: z.enum(["available", "unavailable"]),
-    sortOrder: sortOrderSchema,
     variants: z.array(variantSchema).max(20, "Up to 20 variants are allowed."),
     modifiers: z.array(modifierSchema).max(20, "Up to 20 add-ons are allowed."),
   })
   .superRefine((value, ctx) => {
-    const variantNames = new Set<string>();
-    value.variants.forEach((variant, index) => {
-      const key = variant.name.toLowerCase();
-      if (variantNames.has(key)) {
-        ctx.addIssue({
-          code: "custom",
-          message: "Variant names must be unique.",
-          path: ["variants", index, "name"],
-        });
-      }
-      variantNames.add(key);
-    });
-
-    const modifierNames = new Set<string>();
-    value.modifiers.forEach((modifier, index) => {
-      const key = modifier.name.toLowerCase();
-      if (modifierNames.has(key)) {
-        ctx.addIssue({
-          code: "custom",
-          message: "Add-on names must be unique.",
-          path: ["modifiers", index, "name"],
-        });
-      }
-      modifierNames.add(key);
-    });
+    addDuplicateNameIssues(
+      value.variants,
+      "variants",
+      "Variant names must be unique.",
+      ctx,
+    );
+    addDuplicateNameIssues(
+      value.modifiers,
+      "modifiers",
+      "Add-on names must be unique.",
+      ctx,
+    );
   });
 
-export type ItemInput = z.output<typeof itemInputSchema>;
+export const normalizedItemInputSchema = z
+  .object({
+    ...itemFields,
+    description: normalizedOptionalText(2000),
+    basePrice: baseMinorPriceSchema,
+    variants: z
+      .array(normalizedVariantSchema)
+      .max(20, "Up to 20 variants are allowed."),
+    modifiers: z
+      .array(normalizedModifierSchema)
+      .max(20, "Up to 20 add-ons are allowed."),
+  })
+  .superRefine((value, ctx) => {
+    addDuplicateNameIssues(
+      value.variants,
+      "variants",
+      "Variant names must be unique.",
+      ctx,
+    );
+    addDuplicateNameIssues(
+      value.modifiers,
+      "modifiers",
+      "Add-on names must be unique.",
+      ctx,
+    );
+  });
+
+export type ItemInput = z.output<typeof normalizedItemInputSchema>;

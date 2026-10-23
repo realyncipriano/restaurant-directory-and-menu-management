@@ -4,8 +4,6 @@ import type { DbClient } from "@/db/client";
 import { isUniqueViolation } from "@/db/pool-errors";
 import {
   menuCategories,
-  menuItemModifiers,
-  menuItemVariants,
   menuItems,
   menus,
 } from "@/db/schema";
@@ -16,11 +14,13 @@ import {
 } from "@/lib/errors";
 import {
   categoryInputSchema,
+  normalizedItemInputSchema,
   type ItemInput,
 } from "@/lib/validation/menu";
 import { parseOrThrow } from "@/lib/validation/parse";
 import { writeAuditLog } from "./audit";
 import { lockDraftMenu, requireDraftEditable } from "./menu-access";
+import { replaceItemVariantsAndModifiers } from "./menu-item-details";
 import type {
   MenuCategoryRecord,
   MenuItemRecord,
@@ -81,41 +81,18 @@ async function requireItem(
   return row;
 }
 
-async function writeItemDetails(
-  db: DbExecutor,
-  itemId: string,
-  item: ItemInput,
-  now: Date,
-): Promise<void> {
-  await db.delete(menuItemVariants).where(eq(menuItemVariants.menuItemId, itemId));
-  await db
-    .delete(menuItemModifiers)
-    .where(eq(menuItemModifiers.menuItemId, itemId));
-
-  if (item.variants.length > 0) {
-    await db.insert(menuItemVariants).values(
-      item.variants.map((variant, index) => ({
-        menuItemId: itemId,
-        name: variant.name,
-        priceMinor: variant.price,
-        sortOrder: index,
-        createdAt: now,
-      })),
-    );
-  }
-
-  if (item.modifiers.length > 0) {
-    await db.insert(menuItemModifiers).values(
-      item.modifiers.map((modifier, index) => ({
-        menuItemId: itemId,
-        name: modifier.name,
-        additionalPriceMinor: modifier.price,
-        isAvailable: modifier.isAvailable,
-        sortOrder: index,
-        createdAt: now,
-      })),
-    );
-  }
+function itemDetails(item: ItemInput) {
+  return {
+    variants: item.variants.map((variant) => ({
+      name: variant.name,
+      priceMinor: variant.price,
+    })),
+    modifiers: item.modifiers.map((modifier) => ({
+      name: modifier.name,
+      additionalPriceMinor: modifier.price,
+      isAvailable: modifier.isAvailable,
+    })),
+  };
 }
 
 export async function createCategory(
@@ -267,7 +244,7 @@ export async function createMenuItem(
   input: ItemInput,
 ): Promise<MenuItemRecord> {
   const { access } = await requireDraftEditable(db, actorId, menuId);
-  const parsed = input;
+  const parsed = parseOrThrow(normalizedItemInputSchema, input);
   const now = new Date();
   const actor: Actor = { id: access.actor.id, email: access.actor.email };
 
@@ -292,7 +269,7 @@ export async function createMenuItem(
 
     if (!item) throw new ConflictError("Could not add the menu item.");
 
-    await writeItemDetails(tx, item.id, parsed, now);
+    await replaceItemVariantsAndModifiers(tx, item.id, itemDetails(parsed), now);
     await touchMenu(tx, menuId, now);
     await writeAuditLog(tx, {
       actor,
@@ -318,7 +295,7 @@ export async function updateMenuItem(
   input: ItemInput,
 ): Promise<MenuItemRecord> {
   const { access } = await requireDraftEditable(db, actorId, menuId);
-  const parsed = input;
+  const parsed = parseOrThrow(normalizedItemInputSchema, input);
   const now = new Date();
   const actor: Actor = { id: access.actor.id, email: access.actor.email };
 
@@ -343,7 +320,7 @@ export async function updateMenuItem(
 
     if (!updated) throw new NotFoundError("Menu item not found.");
 
-    await writeItemDetails(tx, itemId, parsed, now);
+    await replaceItemVariantsAndModifiers(tx, itemId, itemDetails(parsed), now);
     await touchMenu(tx, menuId, now);
     await writeAuditLog(tx, {
       actor,
