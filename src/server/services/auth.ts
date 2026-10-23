@@ -1,16 +1,13 @@
-import { and, count, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { DbClient } from "@/db/client";
 import { authTokens, users } from "@/db/schema";
-import type { DbExecutor } from "@/db/types";
 import {
   hashPassword,
   verifyDummyPassword,
   verifyPassword,
 } from "@/lib/auth/password";
 import {
-  ACTIVATION_IP_LIMIT,
-  ACTIVATION_WINDOW_SECONDS,
   CHANGE_PASSWORD_LIMIT,
   CHANGE_PASSWORD_WINDOW_SECONDS,
   LOGIN_ACCOUNT_GLOBAL_LIMIT,
@@ -21,16 +18,10 @@ import {
   consumeRateLimit,
   resetRateLimit,
 } from "@/lib/auth/rate-limit";
-import {
-  createSession,
-  revokeAllUserSessions,
-  type CreatedSession,
-} from "@/lib/auth/session";
-import { hashIdentifier, hashToken, generateSecureToken } from "@/lib/auth/tokens";
-import { getAppUrl } from "@/lib/env";
+import { createSession, revokeAllUserSessions } from "@/lib/auth/session";
+import { hashIdentifier } from "@/lib/auth/tokens";
 import {
   ConflictError,
-  ForbiddenError,
   InvalidCredentialsError,
   NotFoundError,
   RateLimitedError,
@@ -44,179 +35,30 @@ import {
   inviteSchema,
   loginSchema,
   resetPasswordSchema,
-  validatePasswordStrength,
 } from "@/lib/validation/auth";
 import { writeAuditLog } from "./audit";
+import { requireActiveActor, requireAdminActor } from "./auth/actors";
+import { enforceActivationRateLimit } from "./auth/limits";
+import {
+  INVITE_TTL_MS,
+  RESET_TTL_MS,
+  activationUrl,
+  addMs,
+  assertStrongPassword,
+  publicUser,
+  type AuthResult,
+  type PublicUser,
+  type SessionMeta,
+} from "./auth/shared";
+import {
+  findUsableToken,
+  invalidateUserTokens,
+  issueToken,
+  markTokenUsed,
+} from "./auth/token-store";
 
-const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const RESET_TTL_MS = 60 * 60 * 1000;
-
-type AuthTokenPurpose = "invite" | "password_reset";
-
-export type PublicUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: "admin" | "authorized_user";
-  accountStatus: "invited" | "active" | "deactivated";
-  lastLoginAt: Date | null;
-};
-
-export type AuthResult = {
-  user: PublicUser;
-  session: CreatedSession;
-};
-
-type SessionMeta = {
-  ipHash?: string | null;
-  userAgent?: string | null;
-};
-
-type UserRow = typeof users.$inferSelect;
-
-function publicUser(user: UserRow): PublicUser {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    accountStatus: user.accountStatus,
-    lastLoginAt: user.lastLoginAt,
-  };
-}
-
-function activationUrl(token: string): string {
-  return `${getAppUrl()}/activate?token=${encodeURIComponent(token)}`;
-}
-
-function addMs(date: Date, ms: number): Date {
-  return new Date(date.getTime() + ms);
-}
-
-function assertStrongPassword(password: string): void {
-  const problem = validatePasswordStrength(password);
-  if (problem) {
-    throw new ValidationError(problem, { password: [problem] });
-  }
-}
-
-export async function requireActiveActor(
-  db: DbExecutor,
-  actorId: string,
-): Promise<UserRow> {
-  const [actor] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, actorId))
-    .limit(1);
-
-  if (!actor || actor.accountStatus !== "active") {
-    throw new UnauthenticatedError();
-  }
-  return actor;
-}
-
-export async function requireAdminActor(
-  db: DbExecutor,
-  actorId: string,
-): Promise<UserRow> {
-  const actor = await requireActiveActor(db, actorId);
-  if (actor.role !== "admin") {
-    throw new ForbiddenError();
-  }
-  return actor;
-}
-
-async function findUsableToken(
-  db: DbExecutor,
-  rawToken: string,
-  purposes: AuthTokenPurpose[],
-  now: Date,
-) {
-  const token = rawToken.trim();
-  if (token.length < 20 || token.length > 200) return null;
-
-  const [row] = await db
-    .select({
-      tokenId: authTokens.id,
-      purpose: authTokens.purpose,
-      expiresAt: authTokens.expiresAt,
-      userId: users.id,
-      name: users.name,
-      email: users.email,
-      role: users.role,
-      accountStatus: users.accountStatus,
-      passwordHash: users.passwordHash,
-    })
-    .from(authTokens)
-    .innerJoin(users, eq(authTokens.userId, users.id))
-    .where(
-      and(
-        eq(authTokens.tokenHash, hashToken(token)),
-        inArray(authTokens.purpose, purposes),
-        isNull(authTokens.usedAt),
-        gt(authTokens.expiresAt, now),
-      ),
-    )
-    .limit(1);
-
-  if (!row) return null;
-
-  if (row.purpose === "invite" && row.accountStatus !== "invited") {
-    return null;
-  }
-  if (row.purpose === "password_reset" && row.accountStatus !== "active") {
-    return null;
-  }
-
-  return row;
-}
-
-async function markTokenUsed(
-  db: DbExecutor,
-  tokenId: string,
-  now: Date,
-): Promise<boolean> {
-  const [row] = await db
-    .update(authTokens)
-    .set({ usedAt: now })
-    .where(and(eq(authTokens.id, tokenId), isNull(authTokens.usedAt)))
-    .returning({ id: authTokens.id });
-  return Boolean(row);
-}
-
-async function invalidateUserTokens(
-  db: DbExecutor,
-  userId: string,
-  now: Date,
-): Promise<void> {
-  await db
-    .update(authTokens)
-    .set({ usedAt: now })
-    .where(and(eq(authTokens.userId, userId), isNull(authTokens.usedAt)));
-}
-
-async function issueToken(
-  db: DbExecutor,
-  input: {
-    userId: string;
-    purpose: AuthTokenPurpose;
-    createdBy: string | null;
-    expiresAt: Date;
-    now: Date;
-  },
-): Promise<string> {
-  const token = generateSecureToken();
-  await db.insert(authTokens).values({
-    userId: input.userId,
-    purpose: input.purpose,
-    tokenHash: hashToken(token),
-    expiresAt: input.expiresAt,
-    createdBy: input.createdBy,
-    createdAt: input.now,
-  });
-  return token;
-}
+export { requireActiveActor, requireAdminActor } from "./auth/actors";
+export type { AuthResult, PublicUser } from "./auth/shared";
 
 export async function loginWithPassword(
   db: DbClient,
@@ -829,21 +671,4 @@ export async function listUsers(
     .from(users)
     .orderBy(users.createdAt);
   return rows.map(publicUser);
-}
-
-async function enforceActivationRateLimit(
-  db: DbClient,
-  ipHash: string | null | undefined,
-  now: Date,
-): Promise<void> {
-  if (!ipHash) return;
-  const result = await consumeRateLimit(db, {
-    key: `activation-ip:${ipHash}`,
-    limit: ACTIVATION_IP_LIMIT,
-    windowSeconds: ACTIVATION_WINDOW_SECONDS,
-    now,
-  });
-  if (!result.allowed) {
-    throw new RateLimitedError(result.retryAfterSeconds);
-  }
 }
