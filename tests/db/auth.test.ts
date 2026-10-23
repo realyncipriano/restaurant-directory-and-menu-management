@@ -35,6 +35,7 @@ import {
 
 const NEW_PASSWORD = "New-Password-456!";
 const NOW = new Date("2026-01-15T12:00:00.000Z");
+const MISSING_ID = "00000000-0000-4000-8000-000000000000";
 
 describe("authentication services (ephemeral PGlite)", () => {
   let handle: EphemeralDb;
@@ -282,6 +283,93 @@ describe("authentication services (ephemeral PGlite)", () => {
     ).rejects.toBeInstanceOf(RateLimitedError);
   });
 
+  it("clears only the scoped account login limit after a successful sign-in", async () => {
+    await seedUser(db, { email: "reset-limit@example.com" });
+    const emailHash = hashIdentifier("reset-limit@example.com");
+    const accountKey = `login-account:${emailHash}:ip-reset`;
+
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      await expect(
+        loginWithPassword(db, {
+          email: "reset-limit@example.com",
+          password: "Wrong-Password-999!",
+          ipHash: "ip-reset",
+          now: NOW,
+        }),
+      ).rejects.toBeInstanceOf(InvalidCredentialsError);
+    }
+
+    await loginWithPassword(db, {
+      email: "reset-limit@example.com",
+      password: TEST_PASSWORD,
+      ipHash: "ip-reset",
+      now: NOW,
+    });
+
+    const rows = await db.select().from(rateLimits);
+    const counts = new Map(rows.map((row) => [row.key, row.count]));
+    expect(counts.has(accountKey)).toBe(false);
+    expect(counts.get(`login-account-global:${emailHash}`)).toBe(10);
+    expect(counts.get("login-ip:ip-reset")).toBe(10);
+  });
+
+  it("enforces the IP login limit independently of account limits", async () => {
+    await db.insert(rateLimits).values({
+      key: "login-ip:ip-only",
+      count: 30,
+      windowEndsAt: new Date(NOW.getTime() + 15 * 60 * 1000),
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+
+    await expect(
+      loginWithPassword(db, {
+        email: "ip-only@example.com",
+        password: TEST_PASSWORD,
+        ipHash: "ip-only",
+        now: NOW,
+      }),
+    ).rejects.toBeInstanceOf(RateLimitedError);
+
+    const rows = await db.select().from(rateLimits);
+    const counts = new Map(rows.map((row) => [row.key, row.count]));
+    const emailHash = hashIdentifier("ip-only@example.com");
+    expect(counts.get(`login-account:${emailHash}:ip-only`)).toBe(1);
+    expect(counts.get(`login-account-global:${emailHash}`)).toBe(1);
+    expect(counts.get("login-ip:ip-only")).toBe(31);
+  });
+
+  it("returns the same generic failure for unknown, invited, and passwordless accounts", async () => {
+    await seedUser(db, {
+      email: "invited@example.com",
+      status: "invited",
+    });
+    await seedUser(db, {
+      email: "passwordless@example.com",
+      password: null,
+    });
+
+    const emails = [
+      "unknown@example.com",
+      "invited@example.com",
+      "passwordless@example.com",
+    ];
+
+    for (const email of emails) {
+      const failure = await loginWithPassword(db, {
+        email,
+        password: TEST_PASSWORD,
+        now: NOW,
+      }).catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(InvalidCredentialsError);
+      if (failure instanceof InvalidCredentialsError) {
+        expect(failure.code).toBe("invalid_credentials");
+        expect(failure.message).toBe("Invalid email or password.");
+      }
+    }
+  });
+
   it("invalidates outstanding reset tokens when a password changes", async () => {
     const admin = await seedUser(db, {
       email: "admin@example.com",
@@ -303,6 +391,90 @@ describe("authentication services (ephemeral PGlite)", () => {
     });
 
     expect(await getActivationContext(db, reset.token, NOW)).toBeNull();
+  });
+
+  it("rejects reset links for missing, invited, deactivated, and passwordless accounts", async () => {
+    const admin = await seedUser(db, {
+      email: "admin@example.com",
+      role: "admin",
+    });
+    const invited = await seedUser(db, {
+      email: "invited-reset@example.com",
+      status: "invited",
+    });
+    const deactivated = await seedUser(db, {
+      email: "deactivated-reset@example.com",
+      status: "deactivated",
+    });
+    const passwordless = await seedUser(db, {
+      email: "passwordless-reset@example.com",
+      password: null,
+    });
+
+    await expect(
+      createPasswordResetLink(db, {
+        actorId: admin.id,
+        userId: MISSING_ID,
+        now: NOW,
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+
+    for (const userId of [invited.id, deactivated.id, passwordless.id]) {
+      await expect(
+        createPasswordResetLink(db, {
+          actorId: admin.id,
+          userId,
+          now: NOW,
+        }),
+      ).rejects.toBeInstanceOf(ConflictError);
+    }
+
+    const tokenRows = await db.select().from(authTokens);
+    expect(tokenRows).toHaveLength(0);
+  });
+
+  it("rejects tokens used by the wrong credential flow without consuming them", async () => {
+    const admin = await seedUser(db, {
+      email: "admin@example.com",
+      role: "admin",
+    });
+    const member = await seedUser(db, { email: "member@example.com" });
+    const invite = await createInvite(db, {
+      actorId: admin.id,
+      email: "wrong-purpose@example.com",
+      now: NOW,
+    });
+    const reset = await createPasswordResetLink(db, {
+      actorId: admin.id,
+      userId: member.id,
+      now: NOW,
+    });
+
+    await expect(
+      resetPasswordWithToken(db, {
+        token: invite.token,
+        password: NEW_PASSWORD,
+        confirmPassword: NEW_PASSWORD,
+        now: NOW,
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+
+    await expect(
+      activateAccount(db, {
+        token: reset.token,
+        name: "Wrong Purpose",
+        password: NEW_PASSWORD,
+        confirmPassword: NEW_PASSWORD,
+        now: NOW,
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+
+    expect((await getActivationContext(db, invite.token, NOW))?.kind).toBe(
+      "invite",
+    );
+    expect((await getActivationContext(db, reset.token, NOW))?.kind).toBe(
+      "password_reset",
+    );
   });
 
   it("resets a password, revokes existing sessions, and issues a new session", async () => {
@@ -339,6 +511,15 @@ describe("authentication services (ephemeral PGlite)", () => {
     expect(
       await getSessionUserByToken(db, resetResult.session.token, NOW),
     ).not.toBeNull();
+
+    await expect(
+      resetPasswordWithToken(db, {
+        token: reset.token,
+        password: NEW_PASSWORD,
+        confirmPassword: NEW_PASSWORD,
+        now: NOW,
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
 
     await expect(
       loginWithPassword(db, {
@@ -388,6 +569,43 @@ describe("authentication services (ephemeral PGlite)", () => {
     ).not.toBeNull();
   });
 
+  it("revokes every existing session after a password change", async () => {
+    const user = await seedUser(db, { email: "multi-session@example.com" });
+    const first = await loginWithPassword(db, {
+      email: "multi-session@example.com",
+      password: TEST_PASSWORD,
+      now: NOW,
+    });
+    const second = await loginWithPassword(db, {
+      email: "multi-session@example.com",
+      password: TEST_PASSWORD,
+      now: NOW,
+    });
+
+    const changed = await changePassword(db, {
+      actorId: user.id,
+      currentPassword: TEST_PASSWORD,
+      password: NEW_PASSWORD,
+      confirmPassword: NEW_PASSWORD,
+      now: NOW,
+    });
+
+    expect(await getSessionUserByToken(db, first.session.token, NOW)).toBeNull();
+    expect(
+      await getSessionUserByToken(db, second.session.token, NOW),
+    ).toBeNull();
+    expect(
+      await getSessionUserByToken(db, changed.session.token, NOW),
+    ).not.toBeNull();
+
+    const sessionRows = await db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.userId, user.id));
+    expect(sessionRows).toHaveLength(3);
+    expect(sessionRows.filter((row) => row.revokedAt === null)).toHaveLength(1);
+  });
+
   it("deactivates and reactivates users, revoking access in between", async () => {
     const admin = await seedUser(db, {
       email: "admin@example.com",
@@ -427,6 +645,37 @@ describe("authentication services (ephemeral PGlite)", () => {
       now: NOW,
     });
     expect(relogin.user.id).toBe(member.id);
+  });
+
+  it("invalidates reset tokens when the target account is deactivated", async () => {
+    const admin = await seedUser(db, {
+      email: "admin@example.com",
+      role: "admin",
+    });
+    const member = await seedUser(db, {
+      email: "deactivate-reset@example.com",
+    });
+    const reset = await createPasswordResetLink(db, {
+      actorId: admin.id,
+      userId: member.id,
+      now: NOW,
+    });
+
+    await deactivateUser(db, {
+      actorId: admin.id,
+      userId: member.id,
+      now: NOW,
+    });
+
+    expect(await getActivationContext(db, reset.token, NOW)).toBeNull();
+    await expect(
+      resetPasswordWithToken(db, {
+        token: reset.token,
+        password: NEW_PASSWORD,
+        confirmPassword: NEW_PASSWORD,
+        now: NOW,
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("prevents self-deactivation and non-admin user management", async () => {
