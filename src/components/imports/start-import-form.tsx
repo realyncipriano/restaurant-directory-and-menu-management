@@ -189,7 +189,7 @@ export function StartImportForm({
       <Field
         id="import-menu"
         label="Apply scan to draft menu"
-        note="Scans always land in a draft first. Review the extracted items before applying them."
+        note="All section headings are extracted as categories in this menu. Scans always land in a draft first; during review you can accept, reject, or keep only one category."
         noteLayout="below"
         required
       >

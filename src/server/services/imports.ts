@@ -73,6 +73,33 @@ function itemPriceKey(item: MenuTreeItem): string {
   });
 }
 
+type ImportItemRow = typeof menuImportItems.$inferSelect;
+
+function importItemHasPrice(item: ImportItemRow): boolean {
+  return (
+    item.basePriceMinor !== null ||
+    item.variants.some((variant) => variant.priceMinor !== null)
+  );
+}
+
+function isAcceptableImportItem(item: ImportItemRow): boolean {
+  return (
+    item.decision === "pending" &&
+    importItemHasPrice(item) &&
+    (item.confidence ?? 0) >= 70 &&
+    item.duplicateOfImportItemId === null
+  );
+}
+
+function shouldStayPendingOnKeepOnly(item: ImportItemRow): boolean {
+  return (
+    item.needsReview ||
+    (item.confidence ?? 0) < 70 ||
+    !importItemHasPrice(item) ||
+    item.duplicateOfImportItemId !== null
+  );
+}
+
 async function writeVariantsAndModifiers(
   db: DbExecutor,
   itemId: string,
@@ -824,17 +851,7 @@ export async function acceptAllImportItems(
   }
 
   const acceptedIds = data.items
-    .filter((item) => {
-      const priced =
-        item.basePriceMinor !== null ||
-        item.variants.some((variant) => variant.priceMinor !== null);
-      return (
-        item.decision === "pending" &&
-        priced &&
-        (item.confidence ?? 0) >= 70 &&
-        item.duplicateOfImportItemId === null
-      );
-    })
+    .filter(isAcceptableImportItem)
     .map((item) => item.id);
 
   if (acceptedIds.length === 0) return;
@@ -849,6 +866,193 @@ export async function acceptAllImportItems(
         inArray(menuImportItems.id, acceptedIds),
       ),
     );
+}
+
+export type ImportCategoryDecision = "accept" | "reject";
+
+export type ImportCategoryDecisionResult = {
+  categoryName: string;
+  accepted: number;
+  rejected: number;
+  pending: number;
+  pendingInCategory: number;
+};
+
+async function lockImportForReview(
+  tx: DbExecutor,
+  importId: string,
+): Promise<void> {
+  const [locked] = await tx
+    .select({ id: menuImports.id, status: menuImports.status })
+    .from(menuImports)
+    .where(eq(menuImports.id, importId))
+    .for("update")
+    .limit(1);
+
+  if (!locked) throw new NotFoundError("Import not found.");
+  if (locked.status !== "needs_review" && locked.status !== "reviewed") {
+    throw new ConflictError("This import is not ready for review.");
+  }
+}
+
+async function updateItemDecisions(
+  tx: DbExecutor,
+  importId: string,
+  itemIds: string[],
+  decision: ImportCategoryDecision,
+  now: Date,
+): Promise<void> {
+  if (itemIds.length === 0) return;
+
+  await tx
+    .update(menuImportItems)
+    .set({ decision, updatedAt: now })
+    .where(
+      and(
+        eq(menuImportItems.importId, importId),
+        inArray(menuImportItems.id, itemIds),
+      ),
+    );
+}
+
+function countPendingAfter(
+  items: ImportItemRow[],
+  changed: Map<string, ImportCategoryDecision>,
+  categoryKey?: string,
+): number {
+  return items.filter((item) => {
+    if (
+      categoryKey !== undefined &&
+      normalizeName(item.categoryName) !== categoryKey
+    ) {
+      return false;
+    }
+    return (changed.get(item.id) ?? item.decision) === "pending";
+  }).length;
+}
+
+export async function updateImportCategoryDecision(
+  db: DbClient,
+  actorId: string,
+  importId: string,
+  categoryName: string,
+  decision: ImportCategoryDecision,
+): Promise<ImportCategoryDecisionResult> {
+  const categoryKey = normalizeName(categoryName);
+  if (!categoryKey) {
+    throw new ValidationError("Choose a category.");
+  }
+
+  const data = await getMenuImport(db, actorId, importId);
+  await requireDraftEditable(db, actorId, data.menu.id);
+
+  const now = new Date();
+
+  return db.transaction(async (tx) => {
+    await lockImportForReview(tx, importId);
+
+    const items = await tx
+      .select()
+      .from(menuImportItems)
+      .where(eq(menuImportItems.importId, importId));
+    const categoryItems = items.filter(
+      (item) => normalizeName(item.categoryName) === categoryKey,
+    );
+    if (categoryItems.length === 0) {
+      throw new ValidationError("That category was not found in this scan.");
+    }
+
+    const changedIds =
+      decision === "accept"
+        ? categoryItems
+            .filter(isAcceptableImportItem)
+            .map((item) => item.id)
+        : categoryItems
+            .filter((item) => item.decision === "pending")
+            .map((item) => item.id);
+
+    await updateItemDecisions(tx, importId, changedIds, decision, now);
+    await tx
+      .update(menuImports)
+      .set({ updatedAt: now })
+      .where(eq(menuImports.id, importId));
+
+    const changed = new Map(
+      changedIds.map((itemId) => [itemId, decision] as const),
+    );
+
+    return {
+      categoryName: categoryItems[0]!.categoryName,
+      accepted: decision === "accept" ? changedIds.length : 0,
+      rejected: decision === "reject" ? changedIds.length : 0,
+      pending: countPendingAfter(items, changed),
+      pendingInCategory: countPendingAfter(items, changed, categoryKey),
+    };
+  });
+}
+
+export async function keepOnlyImportCategory(
+  db: DbClient,
+  actorId: string,
+  importId: string,
+  categoryName: string,
+): Promise<ImportCategoryDecisionResult> {
+  const categoryKey = normalizeName(categoryName);
+  if (!categoryKey) {
+    throw new ValidationError("Choose a category.");
+  }
+
+  const data = await getMenuImport(db, actorId, importId);
+  await requireDraftEditable(db, actorId, data.menu.id);
+
+  const now = new Date();
+
+  return db.transaction(async (tx) => {
+    await lockImportForReview(tx, importId);
+
+    const items = await tx
+      .select()
+      .from(menuImportItems)
+      .where(eq(menuImportItems.importId, importId));
+    const categoryItems = items.filter(
+      (item) => normalizeName(item.categoryName) === categoryKey,
+    );
+    if (categoryItems.length === 0) {
+      throw new ValidationError("That category was not found in this scan.");
+    }
+
+    const acceptedIds = categoryItems
+      .filter(isAcceptableImportItem)
+      .map((item) => item.id);
+    const rejectedIds = items
+      .filter((item) => normalizeName(item.categoryName) !== categoryKey)
+      .filter(
+        (item) =>
+          item.decision === "accept" ||
+          (item.decision === "pending" && !shouldStayPendingOnKeepOnly(item)),
+      )
+      .map((item) => item.id);
+
+    await updateItemDecisions(tx, importId, acceptedIds, "accept", now);
+    await updateItemDecisions(tx, importId, rejectedIds, "reject", now);
+    await tx
+      .update(menuImports)
+      .set({ updatedAt: now })
+      .where(eq(menuImports.id, importId));
+
+    const changed = new Map<string, ImportCategoryDecision>([
+      ...acceptedIds.map((itemId) => [itemId, "accept"] as const),
+      ...rejectedIds.map((itemId) => [itemId, "reject"] as const),
+    ]);
+
+    return {
+      categoryName: categoryItems[0]!.categoryName,
+      accepted: acceptedIds.length,
+      rejected: rejectedIds.length,
+      pending: countPendingAfter(items, changed),
+      pendingInCategory: countPendingAfter(items, changed, categoryKey),
+    };
+  });
 }
 
 export async function applyMenuImport(

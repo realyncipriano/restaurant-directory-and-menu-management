@@ -43,7 +43,7 @@ export function MenuForm({
       <Field
         id={`${mode}-title`}
         label="Menu title"
-        note="Shown at the top of the public menu, e.g. Lunch Menu or Weekend Brunch."
+        note="Names the overall menu container, e.g. Beverages. Headings detected in a scan, such as Coffee or Non-coffee, become categories inside it."
         required
         error={state.fieldErrors?.title?.[0]}
       >

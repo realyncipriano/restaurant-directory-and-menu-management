@@ -11,10 +11,16 @@ import {
   menuItemVariants,
   menus,
 } from "@/db/schema";
-import { ForbiddenError, ValidationError } from "@/lib/errors";
+import {
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from "@/lib/errors";
 import type { ItemInput } from "@/lib/validation/menu";
 import {
   applyMenuImport,
+  keepOnlyImportCategory,
+  updateImportCategoryDecision,
   updateImportItem,
 } from "@/server/services/imports";
 import { createMenuItem } from "@/server/services/menu-content";
@@ -46,6 +52,29 @@ function itemInput(
 describe("menu import application (ephemeral PGlite)", () => {
   let handle: EphemeralDb;
   let db: DbClient;
+
+  async function stageItem(
+    importId: string,
+    values: Partial<typeof menuImportItems.$inferInsert> & {
+      categoryName: string;
+      name: string;
+    },
+  ) {
+    const [row] = await db
+      .insert(menuImportItems)
+      .values({
+        importId,
+        basePriceMinor: 5000,
+        currency: "PHP",
+        confidence: 90,
+        needsReview: false,
+        changeType: "new",
+        decision: "pending",
+        ...values,
+      })
+      .returning();
+    return row!;
+  }
 
   beforeAll(async () => {
     const opened = await openTestDb();
@@ -284,6 +313,350 @@ describe("menu import application (ephemeral PGlite)", () => {
     await expect(
       applyMenuImport(db, admin.id, record.id),
     ).rejects.toThrow(/has no price/);
+  });
+
+  it("keeps only the selected category and applies only its items", async () => {
+    const { admin, menu, record } = await setup();
+
+    await stageItem(record.id, {
+      categoryName: "Coffee",
+      name: "Latte",
+      basePriceMinor: 12000,
+    });
+    await stageItem(record.id, {
+      categoryName: "Non-coffee",
+      name: "Matcha",
+      basePriceMinor: 15000,
+    });
+    await stageItem(record.id, {
+      categoryName: "Espresso Specials",
+      name: "Espresso",
+      basePriceMinor: 9000,
+    });
+
+    const result = await keepOnlyImportCategory(
+      db,
+      admin.id,
+      record.id,
+      "non-coffee",
+    );
+
+    expect(result).toMatchObject({
+      categoryName: "Non-coffee",
+      accepted: 1,
+      rejected: 2,
+      pending: 0,
+      pendingInCategory: 0,
+    });
+
+    await applyMenuImport(db, admin.id, record.id);
+
+    const categories = await db
+      .select()
+      .from(menuCategories)
+      .where(eq(menuCategories.menuId, menu.id));
+    const categoryNames = categories.map((category) => category.name);
+    expect(categoryNames).toContain("Non-coffee");
+    expect(categoryNames).not.toContain("Coffee");
+    expect(categoryNames).not.toContain("Espresso Specials");
+
+    const matcha = await db
+      .select()
+      .from(menuItems)
+      .where(eq(menuItems.name, "Matcha"));
+    const latte = await db
+      .select()
+      .from(menuItems)
+      .where(eq(menuItems.name, "Latte"));
+    const espresso = await db
+      .select()
+      .from(menuItems)
+      .where(eq(menuItems.name, "Espresso"));
+    expect(matcha).toHaveLength(1);
+    expect(latte).toHaveLength(0);
+    expect(espresso).toHaveLength(0);
+  });
+
+  it("rejects previously accepted items outside the kept category", async () => {
+    const { admin, record } = await setup();
+
+    const coffee = await stageItem(record.id, {
+      categoryName: "Coffee",
+      name: "House Blend",
+      basePriceMinor: 11000,
+      decision: "accept",
+    });
+    const nonCoffee = await stageItem(record.id, {
+      categoryName: "Non-coffee",
+      name: "Iced Tea",
+      basePriceMinor: 8000,
+      decision: "accept",
+    });
+
+    const result = await keepOnlyImportCategory(
+      db,
+      admin.id,
+      record.id,
+      "Non-coffee",
+    );
+
+    expect(result).toMatchObject({
+      accepted: 0,
+      rejected: 1,
+      pending: 0,
+      pendingInCategory: 0,
+    });
+
+    const rows = await db
+      .select()
+      .from(menuImportItems)
+      .where(eq(menuImportItems.importId, record.id));
+    const byId = new Map(rows.map((row) => [row.id, row.decision]));
+    expect(byId.get(coffee.id)).toBe("reject");
+    expect(byId.get(nonCoffee.id)).toBe("accept");
+
+    await applyMenuImport(db, admin.id, record.id);
+    const coffeeItem = await db
+      .select()
+      .from(menuItems)
+      .where(eq(menuItems.name, "House Blend"));
+    expect(coffeeItem).toHaveLength(0);
+  });
+
+  it("keeps flagged, low-confidence, and unpriced items pending on keep only", async () => {
+    const { admin, record } = await setup();
+
+    const lowConfidence = await stageItem(record.id, {
+      categoryName: "Coffee",
+      name: "Low Confidence",
+      confidence: 60,
+      needsReview: true,
+    });
+    const unpriced = await stageItem(record.id, {
+      categoryName: "Coffee",
+      name: "No Price",
+      basePriceMinor: null,
+      variants: [],
+      needsReview: true,
+    });
+    const flagged = await stageItem(record.id, {
+      categoryName: "Coffee",
+      name: "Flagged Change",
+      needsReview: true,
+    });
+    const normal = await stageItem(record.id, {
+      categoryName: "Coffee",
+      name: "Ordinary Coffee",
+    });
+    const kept = await stageItem(record.id, {
+      categoryName: "Non-coffee",
+      name: "Matcha",
+    });
+
+    const result = await keepOnlyImportCategory(
+      db,
+      admin.id,
+      record.id,
+      "Non-coffee",
+    );
+
+    expect(result).toMatchObject({
+      accepted: 1,
+      rejected: 1,
+      pending: 3,
+      pendingInCategory: 0,
+    });
+
+    const rows = await db
+      .select()
+      .from(menuImportItems)
+      .where(eq(menuImportItems.importId, record.id));
+    const byId = new Map(rows.map((row) => [row.id, row.decision]));
+    expect(byId.get(lowConfidence.id)).toBe("pending");
+    expect(byId.get(unpriced.id)).toBe("pending");
+    expect(byId.get(flagged.id)).toBe("pending");
+    expect(byId.get(normal.id)).toBe("reject");
+    expect(byId.get(kept.id)).toBe("accept");
+  });
+
+  it("updates only the intended category for accept and reject decisions", async () => {
+    const { admin, record } = await setup();
+
+    const coffeeOne = await stageItem(record.id, {
+      categoryName: "Coffee",
+      name: "Americano",
+    });
+    const coffeeTwo = await stageItem(record.id, {
+      categoryName: "Coffee",
+      name: "Cappuccino",
+    });
+    const nonCoffee = await stageItem(record.id, {
+      categoryName: "Non-coffee",
+      name: "Fruit Tea",
+    });
+
+    const accepted = await updateImportCategoryDecision(
+      db,
+      admin.id,
+      record.id,
+      "  NON-COFFEE ",
+      "accept",
+    );
+    expect(accepted).toMatchObject({
+      categoryName: "Non-coffee",
+      accepted: 1,
+      rejected: 0,
+      pending: 2,
+      pendingInCategory: 0,
+    });
+
+    const rejected = await updateImportCategoryDecision(
+      db,
+      admin.id,
+      record.id,
+      "coffee",
+      "reject",
+    );
+    expect(rejected).toMatchObject({
+      accepted: 0,
+      rejected: 2,
+      pending: 0,
+      pendingInCategory: 0,
+    });
+
+    const repeatedAccept = await updateImportCategoryDecision(
+      db,
+      admin.id,
+      record.id,
+      "Non-coffee",
+      "accept",
+    );
+    expect(repeatedAccept.accepted).toBe(0);
+
+    const repeatedReject = await updateImportCategoryDecision(
+      db,
+      admin.id,
+      record.id,
+      "Coffee",
+      "reject",
+    );
+    expect(repeatedReject.rejected).toBe(0);
+
+    const rows = await db
+      .select()
+      .from(menuImportItems)
+      .where(eq(menuImportItems.importId, record.id));
+    const byId = new Map(rows.map((row) => [row.id, row.decision]));
+    expect(byId.get(coffeeOne.id)).toBe("reject");
+    expect(byId.get(coffeeTwo.id)).toBe("reject");
+    expect(byId.get(nonCoffee.id)).toBe("accept");
+  });
+
+  it("matches categories case-insensitively and rejects blank or unknown categories", async () => {
+    const { admin, record } = await setup();
+    await stageItem(record.id, {
+      categoryName: "Non-coffee",
+      name: "Matcha",
+    });
+
+    await expect(
+      keepOnlyImportCategory(db, admin.id, record.id, "   "),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      updateImportCategoryDecision(db, admin.id, record.id, "", "accept"),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      keepOnlyImportCategory(db, admin.id, record.id, "Tea"),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      updateImportCategoryDecision(
+        db,
+        admin.id,
+        record.id,
+        "Tea",
+        "reject",
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    const rows = await db
+      .select()
+      .from(menuImportItems)
+      .where(eq(menuImportItems.importId, record.id));
+    expect(rows.every((row) => row.decision === "pending")).toBe(true);
+  });
+
+  it("rejects category decisions from read-only and unauthorized users", async () => {
+    const { admin, viewer, record } = await setup();
+    const outsider = await seedUser(db, {
+      email: "outsider@example.com",
+    });
+    await stageItem(record.id, {
+      categoryName: "Coffee",
+      name: "Latte",
+    });
+
+    await expect(
+      updateImportCategoryDecision(
+        db,
+        viewer.id,
+        record.id,
+        "Coffee",
+        "accept",
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      keepOnlyImportCategory(db, viewer.id, record.id, "Coffee"),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    await expect(
+      updateImportCategoryDecision(
+        db,
+        outsider.id,
+        record.id,
+        "Coffee",
+        "accept",
+      ),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    await expect(
+      keepOnlyImportCategory(db, outsider.id, record.id, "Coffee"),
+    ).rejects.toBeInstanceOf(NotFoundError);
+
+    const accepted = await updateImportCategoryDecision(
+      db,
+      admin.id,
+      record.id,
+      "Coffee",
+      "accept",
+    );
+    expect(accepted.accepted).toBe(1);
+  });
+
+  it("keeps decisions stable across repeated and concurrent keep only requests", async () => {
+    const { admin, record } = await setup();
+    await stageItem(record.id, {
+      categoryName: "Coffee",
+      name: "Americano",
+    });
+    await stageItem(record.id, {
+      categoryName: "Non-coffee",
+      name: "Matcha",
+    });
+
+    const results = await Promise.allSettled([
+      keepOnlyImportCategory(db, admin.id, record.id, "Non-coffee"),
+      keepOnlyImportCategory(db, admin.id, record.id, "Non-coffee"),
+    ]);
+    expect(results.every((result) => result.status === "fulfilled")).toBe(true);
+
+    const rows = await db
+      .select()
+      .from(menuImportItems)
+      .where(eq(menuImportItems.importId, record.id));
+    const byCategory = new Map(
+      rows.map((row) => [row.categoryName, row.decision]),
+    );
+    expect(byCategory.get("Coffee")).toBe("reject");
+    expect(byCategory.get("Non-coffee")).toBe("accept");
   });
 
   it("requires edit permission to review or apply", async () => {

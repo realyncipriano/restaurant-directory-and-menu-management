@@ -18,9 +18,12 @@ import {
   applyMenuImport,
   beginMenuImport,
   confirmMenuImport,
+  keepOnlyImportCategory,
   processMenuImport,
+  updateImportCategoryDecision,
   updateImportItem,
   type BeginImportResult,
+  type ImportCategoryDecisionResult,
   type ImportUploadFile,
 } from "@/server/services/imports";
 
@@ -54,6 +57,28 @@ function revalidateImportPaths(restaurantId: string, importId?: string): void {
       `/dashboard/restaurants/${restaurantId}/imports/${importId}`,
     );
   }
+}
+
+function categoryReviewUrl(input: {
+  restaurantId: string;
+  importId: string;
+  categoryName?: string;
+  notice?: string;
+  error?: string;
+  result?: ImportCategoryDecisionResult;
+}): string {
+  const params = new URLSearchParams();
+  if (input.categoryName) params.set("category", input.categoryName);
+  if (input.notice) params.set("notice", input.notice);
+  if (input.error) params.set("error", input.error);
+  if (input.result) {
+    params.set("accepted", String(input.result.accepted));
+    params.set("rejected", String(input.result.rejected));
+    params.set("pending", String(input.result.pending));
+    params.set("pendingInCategory", String(input.result.pendingInCategory));
+  }
+  const query = params.toString();
+  return `/dashboard/restaurants/${input.restaurantId}/imports/${input.importId}${query ? `?${query}` : ""}`;
 }
 
 export type BeginImportActionResult = {
@@ -184,6 +209,99 @@ export async function acceptAllImportItemsAction(
   revalidateImportPaths(restaurantId, importId);
   redirect(
     `/dashboard/restaurants/${restaurantId}/imports/${importId}?notice=accepted`,
+  );
+}
+
+export async function updateCategoryDecisionAction(
+  formData: FormData,
+): Promise<void> {
+  const actorId = await currentUserId();
+  if (!actorId) redirect("/login");
+  const restaurantId = formString(formData, "restaurantId");
+  const importId = formString(formData, "importId");
+  const categoryName = formString(formData, "categoryName");
+  const decision = formString(formData, "decision");
+
+  if (decision !== "accept" && decision !== "reject") {
+    redirect(
+      categoryReviewUrl({
+        restaurantId,
+        importId,
+        categoryName,
+        error: "category",
+      }),
+    );
+  }
+
+  let result: ImportCategoryDecisionResult;
+  try {
+    result = await updateImportCategoryDecision(
+      getDb(),
+      actorId,
+      importId,
+      categoryName,
+      decision,
+    );
+  } catch {
+    redirect(
+      categoryReviewUrl({
+        restaurantId,
+        importId,
+        categoryName,
+        error: "category",
+      }),
+    );
+  }
+
+  revalidateImportPaths(restaurantId, importId);
+  redirect(
+    categoryReviewUrl({
+      restaurantId,
+      importId,
+      categoryName: result.categoryName,
+      notice: decision === "accept" ? "category-accepted" : "category-rejected",
+      result,
+    }),
+  );
+}
+
+export async function keepOnlyCategoryAction(
+  formData: FormData,
+): Promise<void> {
+  const actorId = await currentUserId();
+  if (!actorId) redirect("/login");
+  const restaurantId = formString(formData, "restaurantId");
+  const importId = formString(formData, "importId");
+  const categoryName = formString(formData, "categoryName");
+
+  let result: ImportCategoryDecisionResult;
+  try {
+    result = await keepOnlyImportCategory(
+      getDb(),
+      actorId,
+      importId,
+      categoryName,
+    );
+  } catch {
+    redirect(
+      categoryReviewUrl({
+        restaurantId,
+        importId,
+        categoryName,
+        error: "category",
+      }),
+    );
+  }
+
+  revalidateImportPaths(restaurantId, importId);
+  redirect(
+    categoryReviewUrl({
+      restaurantId,
+      importId,
+      categoryName: result.categoryName,
+      notice: "keep-only",
+      result,
+    }),
   );
 }
 
