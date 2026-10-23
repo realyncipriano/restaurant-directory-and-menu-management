@@ -4,17 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getDb } from "@/db/client";
-import { getCurrentUser } from "@/lib/auth/session";
+import { formStateFromError } from "@/lib/action-error";
 import {
   formString,
   type InviteFormState,
 } from "@/lib/action-state";
-import {
-  AppError,
-  ConflictError,
-  NotFoundError,
-  ValidationError,
-} from "@/lib/errors";
+import { getActionAdminId } from "@/lib/auth/action-user";
+import { ConflictError } from "@/lib/errors";
 import {
   createInvite,
   createPasswordResetLink,
@@ -22,25 +18,11 @@ import {
   reactivateUser,
 } from "@/server/services/auth";
 
-async function requireAdminId(): Promise<string | null> {
-  const user = await getCurrentUser(getDb());
-  return user?.role === "admin" ? user.id : null;
-}
-
-function messageFor(error: unknown): string {
-  if (error instanceof ValidationError) return error.message;
-  if (error instanceof ConflictError || error instanceof NotFoundError) {
-    return error.message;
-  }
-  if (error instanceof AppError) return error.message;
-  return "Something went wrong. Please try again.";
-}
-
 export async function createInviteAction(
   _prevState: InviteFormState,
   formData: FormData,
 ): Promise<InviteFormState> {
-  const adminId = await requireAdminId();
+  const adminId = await getActionAdminId();
   if (!adminId) {
     return { error: "You do not have permission to invite users." };
   }
@@ -58,11 +40,7 @@ export async function createInviteAction(
       inviteEmail: invite.user.email,
     };
   } catch (error) {
-    return {
-      error: messageFor(error),
-      fieldErrors:
-        error instanceof ValidationError ? error.fieldErrors : undefined,
-    };
+    return formStateFromError(error);
   }
 }
 
@@ -70,7 +48,7 @@ export async function createResetLinkAction(
   _prevState: InviteFormState,
   formData: FormData,
 ): Promise<InviteFormState> {
-  const adminId = await requireAdminId();
+  const adminId = await getActionAdminId();
   if (!adminId) {
     return { error: "You do not have permission to reset passwords." };
   }
@@ -85,14 +63,14 @@ export async function createResetLinkAction(
       inviteUrl: link.url,
     };
   } catch (error) {
-    return { error: messageFor(error) };
+    return { error: formStateFromError(error).error };
   }
 }
 
 export async function deactivateUserAction(
   formData: FormData,
 ): Promise<void> {
-  const adminId = await requireAdminId();
+  const adminId = await getActionAdminId();
   if (!adminId) redirect("/dashboard");
 
   try {
@@ -114,7 +92,7 @@ export async function deactivateUserAction(
 export async function reactivateUserAction(
   formData: FormData,
 ): Promise<void> {
-  const adminId = await requireAdminId();
+  const adminId = await getActionAdminId();
   if (!adminId) redirect("/dashboard");
 
   try {

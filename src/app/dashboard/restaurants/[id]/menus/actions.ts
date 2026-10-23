@@ -1,18 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getDb } from "@/db/client";
+import { formStateFromError } from "@/lib/action-error";
 import { formString, type FormState } from "@/lib/action-state";
-import { getCurrentUser } from "@/lib/auth/session";
-import {
-  AppError,
-  ConflictError,
-  ForbiddenError,
-  NotFoundError,
-  ValidationError,
-} from "@/lib/errors";
+import { getActionUserId } from "@/lib/auth/action-user";
+import { revalidateMenuPaths } from "@/lib/revalidate";
 import { itemInputSchema } from "@/lib/validation/menu";
 import { parseOrThrow } from "@/lib/validation/parse";
 import {
@@ -35,26 +29,6 @@ import {
   setMenuItemImage,
 } from "@/server/services/images";
 
-function messageFor(error: unknown): FormState {
-  if (error instanceof ValidationError) {
-    return { error: error.message, fieldErrors: error.fieldErrors };
-  }
-  if (
-    error instanceof ConflictError ||
-    error instanceof ForbiddenError ||
-    error instanceof NotFoundError ||
-    error instanceof AppError
-  ) {
-    return { error: error.message };
-  }
-  return { error: "Something went wrong. Please try again." };
-}
-
-async function currentUserId(): Promise<string | null> {
-  const user = await getCurrentUser(getDb());
-  return user?.id ?? null;
-}
-
 function parseRows(
   formData: FormData,
   key: "variants" | "modifiers",
@@ -69,22 +43,11 @@ function parseRows(
   }
 }
 
-function revalidateMenuPaths(restaurantId: string, menuId?: string): void {
-  revalidatePath("/dashboard/restaurants");
-  revalidatePath(`/dashboard/restaurants/${restaurantId}`);
-  revalidatePath(`/dashboard/restaurants/${restaurantId}/menus`);
-  if (menuId) {
-    revalidatePath(
-      `/dashboard/restaurants/${restaurantId}/menus/${menuId}`,
-    );
-  }
-}
-
 export async function createMenuAction(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
 
@@ -97,7 +60,7 @@ export async function createMenuAction(
     });
     menuId = menu.id;
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
   revalidateMenuPaths(restaurantId, menuId);
@@ -108,7 +71,7 @@ export async function updateMenuSettingsAction(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const menuId = formString(formData, "menuId");
@@ -120,7 +83,7 @@ export async function updateMenuSettingsAction(
       description: formString(formData, "description"),
     });
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
   revalidateMenuPaths(restaurantId, menuId);
@@ -130,7 +93,7 @@ export async function updateMenuSettingsAction(
 }
 
 export async function startDraftAction(formData: FormData): Promise<void> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const menuId = formString(formData, "menuId");
@@ -152,7 +115,7 @@ export async function startDraftAction(formData: FormData): Promise<void> {
 }
 
 export async function discardDraftAction(formData: FormData): Promise<void> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const menuId = formString(formData, "menuId");
@@ -173,7 +136,7 @@ export async function publishMenuAction(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const menuId = formString(formData, "menuId");
@@ -181,7 +144,7 @@ export async function publishMenuAction(
   try {
     await publishMenu(getDb(), actorId, menuId);
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
   revalidateMenuPaths(restaurantId, menuId);
@@ -202,7 +165,7 @@ export async function createCategoryAction(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const menuId = formString(formData, "menuId");
@@ -215,7 +178,7 @@ export async function createCategoryAction(
       categoryFields(formData),
     );
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
   revalidateMenuPaths(restaurantId, menuId);
@@ -226,7 +189,7 @@ export async function updateCategoryAction(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const menuId = formString(formData, "menuId");
@@ -241,7 +204,7 @@ export async function updateCategoryAction(
       categoryFields(formData),
     );
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
   revalidateMenuPaths(restaurantId, menuId);
@@ -249,7 +212,7 @@ export async function updateCategoryAction(
 }
 
 export async function deleteCategoryAction(formData: FormData): Promise<void> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const menuId = formString(formData, "menuId");
@@ -291,7 +254,7 @@ export async function createItemAction(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const menuId = formString(formData, "menuId");
@@ -302,7 +265,7 @@ export async function createItemAction(
     const parsed = parseOrThrow(itemInputSchema, fields);
     await createMenuItem(getDb(), actorId, menuId, parsed);
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
   revalidateMenuPaths(restaurantId, menuId);
@@ -313,7 +276,7 @@ export async function updateItemAction(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const menuId = formString(formData, "menuId");
@@ -325,7 +288,7 @@ export async function updateItemAction(
     const parsed = parseOrThrow(itemInputSchema, fields);
     await updateMenuItem(getDb(), actorId, menuId, itemId, parsed);
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
   revalidateMenuPaths(restaurantId, menuId);
@@ -333,7 +296,7 @@ export async function updateItemAction(
 }
 
 export async function deleteItemAction(formData: FormData): Promise<void> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const menuId = formString(formData, "menuId");
@@ -357,7 +320,7 @@ export async function uploadItemImageAction(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const menuId = formString(formData, "menuId");
@@ -372,7 +335,7 @@ export async function uploadItemImageAction(
       formData.get("image"),
     );
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
   revalidateMenuPaths(restaurantId, menuId);
@@ -380,7 +343,7 @@ export async function uploadItemImageAction(
 }
 
 export async function removeItemImageAction(formData: FormData): Promise<void> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const menuId = formString(formData, "menuId");

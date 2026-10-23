@@ -1,18 +1,16 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getDb } from "@/db/client";
-import { getCurrentUser } from "@/lib/auth/session";
+import { formStateFromError } from "@/lib/action-error";
 import { formString, type FormState } from "@/lib/action-state";
+import { getActionUserId } from "@/lib/auth/action-user";
 import {
-  AppError,
-  ConflictError,
-  ForbiddenError,
-  NotFoundError,
-  ValidationError,
-} from "@/lib/errors";
+  revalidateRestaurantAccess,
+  revalidateRestaurantDetail,
+  revalidateRestaurantList,
+} from "@/lib/revalidate";
 import {
   removeRestaurantImage,
   setRestaurantImage,
@@ -24,26 +22,6 @@ import {
   setRestaurantPermission,
   updateRestaurant,
 } from "@/server/services/restaurants";
-
-function messageFor(error: unknown): FormState {
-  if (error instanceof ValidationError) {
-    return { error: error.message, fieldErrors: error.fieldErrors };
-  }
-  if (
-    error instanceof ConflictError ||
-    error instanceof ForbiddenError ||
-    error instanceof NotFoundError ||
-    error instanceof AppError
-  ) {
-    return { error: error.message };
-  }
-  return { error: "Something went wrong. Please try again." };
-}
-
-async function currentUserId(): Promise<string | null> {
-  const user = await getCurrentUser(getDb());
-  return user?.id ?? null;
-}
 
 function restaurantFields(formData: FormData) {
   return {
@@ -63,7 +41,7 @@ export async function createRestaurantAction(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
 
   let restaurantId: string;
@@ -75,10 +53,10 @@ export async function createRestaurantAction(
     );
     restaurantId = restaurant.id;
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
-  revalidatePath("/dashboard/restaurants");
+  revalidateRestaurantList();
   redirect(`/dashboard/restaurants/${restaurantId}`);
 }
 
@@ -86,7 +64,7 @@ export async function updateRestaurantAction(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
 
   const restaurantId = formString(formData, "restaurantId");
@@ -98,18 +76,18 @@ export async function updateRestaurantAction(
       restaurantFields(formData),
     );
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
-  revalidatePath("/dashboard/restaurants");
-  revalidatePath(`/dashboard/restaurants/${restaurantId}`);
+  revalidateRestaurantList();
+  revalidateRestaurantDetail(restaurantId);
   redirect(`/dashboard/restaurants/${restaurantId}?notice=updated`);
 }
 
 export async function archiveRestaurantAction(
   formData: FormData,
 ): Promise<void> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
 
@@ -119,14 +97,14 @@ export async function archiveRestaurantAction(
     redirect(`/dashboard/restaurants/${restaurantId}?error=archive`);
   }
 
-  revalidatePath("/dashboard/restaurants");
+  revalidateRestaurantList();
   redirect(`/dashboard/restaurants/${restaurantId}?notice=archived`);
 }
 
 export async function activateRestaurantAction(
   formData: FormData,
 ): Promise<void> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
 
@@ -136,14 +114,14 @@ export async function activateRestaurantAction(
     redirect(`/dashboard/restaurants/${restaurantId}?error=activate`);
   }
 
-  revalidatePath("/dashboard/restaurants");
+  revalidateRestaurantList();
   redirect(`/dashboard/restaurants/${restaurantId}?notice=activated`);
 }
 
 export async function setPermissionAction(
   formData: FormData,
 ): Promise<void> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
 
   const restaurantId = formString(formData, "restaurantId");
@@ -159,14 +137,14 @@ export async function setPermissionAction(
     redirect(`/dashboard/restaurants/${restaurantId}/access?error=save`);
   }
 
-  revalidatePath(`/dashboard/restaurants/${restaurantId}/access`);
+  revalidateRestaurantAccess(restaurantId);
   redirect(`/dashboard/restaurants/${restaurantId}/access?notice=saved`);
 }
 
 export async function removePermissionAction(
   formData: FormData,
 ): Promise<void> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
 
   const restaurantId = formString(formData, "restaurantId");
@@ -183,7 +161,7 @@ export async function removePermissionAction(
     redirect(`/dashboard/restaurants/${restaurantId}/access?error=remove`);
   }
 
-  revalidatePath(`/dashboard/restaurants/${restaurantId}/access`);
+  revalidateRestaurantAccess(restaurantId);
   redirect(`/dashboard/restaurants/${restaurantId}/access?notice=removed`);
 }
 
@@ -191,7 +169,7 @@ export async function uploadRestaurantImageAction(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const kind = formString(formData, "kind") === "logo" ? "logo" : "cover";
@@ -205,10 +183,10 @@ export async function uploadRestaurantImageAction(
       formData.get("image"),
     );
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
-  revalidatePath(`/dashboard/restaurants/${restaurantId}`);
+  revalidateRestaurantDetail(restaurantId);
   return {
     success: kind === "logo" ? "Logo updated." : "Cover image updated.",
   };
@@ -217,7 +195,7 @@ export async function uploadRestaurantImageAction(
 export async function removeRestaurantImageAction(
   formData: FormData,
 ): Promise<void> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const kind = formString(formData, "kind") === "logo" ? "logo" : "cover";
@@ -228,6 +206,6 @@ export async function removeRestaurantImageAction(
     redirect(`/dashboard/restaurants/${restaurantId}?error=image`);
   }
 
-  revalidatePath(`/dashboard/restaurants/${restaurantId}`);
+  revalidateRestaurantDetail(restaurantId);
   redirect(`/dashboard/restaurants/${restaurantId}?notice=image-removed`);
 }

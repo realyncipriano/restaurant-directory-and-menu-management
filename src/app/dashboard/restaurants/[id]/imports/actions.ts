@@ -1,18 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getDb } from "@/db/client";
+import { formStateFromError } from "@/lib/action-error";
 import { formString, type FormState } from "@/lib/action-state";
-import { getCurrentUser } from "@/lib/auth/session";
-import {
-  AppError,
-  ConflictError,
-  ForbiddenError,
-  NotFoundError,
-  ValidationError,
-} from "@/lib/errors";
+import { getActionUserId } from "@/lib/auth/action-user";
+import { revalidateImportPaths } from "@/lib/revalidate";
 import {
   acceptAllImportItems,
   applyMenuImport,
@@ -26,38 +20,6 @@ import {
   type ImportCategoryDecisionResult,
   type ImportUploadFile,
 } from "@/server/services/imports";
-
-function messageFor(error: unknown): FormState {
-  if (error instanceof ValidationError) {
-    return { error: error.message, fieldErrors: error.fieldErrors };
-  }
-  if (error instanceof AppError) {
-    return { error: error.message };
-  }
-  if (
-    error instanceof ConflictError ||
-    error instanceof ForbiddenError ||
-    error instanceof NotFoundError
-  ) {
-    return { error: error.message };
-  }
-  return { error: "Something went wrong. Please try again." };
-}
-
-async function currentUserId(): Promise<string | null> {
-  const user = await getCurrentUser(getDb());
-  return user?.id ?? null;
-}
-
-function revalidateImportPaths(restaurantId: string, importId?: string): void {
-  revalidatePath(`/dashboard/restaurants/${restaurantId}`);
-  revalidatePath(`/dashboard/restaurants/${restaurantId}/imports`);
-  if (importId) {
-    revalidatePath(
-      `/dashboard/restaurants/${restaurantId}/imports/${importId}`,
-    );
-  }
-}
 
 function categoryReviewUrl(input: {
   restaurantId: string;
@@ -91,7 +53,7 @@ export async function beginImportAction(input: {
   menuId: string;
   files: ImportUploadFile[];
 }): Promise<BeginImportActionResult> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) {
     return { error: "Your session has expired. Sign in again." };
   }
@@ -106,7 +68,7 @@ export async function beginImportAction(input: {
     );
     return { result };
   } catch (error) {
-    return { error: messageFor(error).error ?? "The upload could not start." };
+    return { error: formStateFromError(error).error ?? "The upload could not start." };
   }
 }
 
@@ -114,7 +76,7 @@ export async function confirmImportAction(input: {
   restaurantId: string;
   importId: string;
 }): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) {
     return { error: "Your session has expired. Sign in again." };
   }
@@ -122,7 +84,7 @@ export async function confirmImportAction(input: {
   try {
     await confirmMenuImport(getDb(), actorId, input.importId);
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
   revalidateImportPaths(input.restaurantId, input.importId);
@@ -133,7 +95,7 @@ export async function processImportAction(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const importId = formString(formData, "importId");
@@ -141,7 +103,7 @@ export async function processImportAction(
   try {
     await processMenuImport(getDb(), actorId, importId);
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
   revalidateImportPaths(restaurantId, importId);
@@ -152,7 +114,7 @@ export async function updateImportItemAction(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const importId = formString(formData, "importId");
@@ -176,7 +138,7 @@ export async function updateImportItemAction(
           : "available",
     });
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
   revalidateImportPaths(restaurantId, importId);
@@ -193,7 +155,7 @@ export async function updateImportItemAction(
 export async function acceptAllImportItemsAction(
   formData: FormData,
 ): Promise<void> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const importId = formString(formData, "importId");
@@ -215,7 +177,7 @@ export async function acceptAllImportItemsAction(
 export async function updateCategoryDecisionAction(
   formData: FormData,
 ): Promise<void> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const importId = formString(formData, "importId");
@@ -268,7 +230,7 @@ export async function updateCategoryDecisionAction(
 export async function keepOnlyCategoryAction(
   formData: FormData,
 ): Promise<void> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const importId = formString(formData, "importId");
@@ -309,7 +271,7 @@ export async function applyImportAction(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const actorId = await currentUserId();
+  const actorId = await getActionUserId();
   if (!actorId) redirect("/login");
   const restaurantId = formString(formData, "restaurantId");
   const importId = formString(formData, "importId");
@@ -318,7 +280,7 @@ export async function applyImportAction(
   try {
     menuId = await applyMenuImport(getDb(), actorId, importId);
   } catch (error) {
-    return messageFor(error);
+    return formStateFromError(error);
   }
 
   revalidateImportPaths(restaurantId, importId);
