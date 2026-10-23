@@ -35,7 +35,7 @@ export async function SiteShell({ children }: { children: ReactNode }) {
               href="/login"
               className="rounded-lg border border-zinc-300 bg-white/70 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-400 hover:bg-white"
             >
-              Staff sign in
+              Sign in
             </Link>
           </div>
         </div>
