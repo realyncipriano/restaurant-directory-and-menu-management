@@ -1,7 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState, type ReactNode } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useActionState, useRef, useState } from "react";
 
 import {
   createItemAction,
@@ -9,6 +8,8 @@ import {
   updateItemAction,
 } from "@/app/dashboard/restaurants/[id]/menus/actions";
 import { ConfirmButton } from "@/components/dashboard/confirm-button";
+import { ModifiersEditor } from "@/components/menus/item-form/modifiers-editor";
+import { VariantsEditor } from "@/components/menus/item-form/variants-editor";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -16,9 +17,17 @@ import { Notice } from "@/components/ui/notice";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/action-state";
-
-type VariantRow = { name: string; price: string };
-type ModifierRow = { name: string; price: string; isAvailable: boolean };
+import {
+  addRow,
+  createModifierRow,
+  createVariantRow,
+  removeRowAt,
+  serializeModifierRows,
+  serializeVariantRows,
+  updateRow,
+  type ModifierRow,
+  type VariantRow,
+} from "@/lib/menu-item-rows";
 
 export type ItemFormValues = {
   id?: string;
@@ -31,28 +40,6 @@ export type ItemFormValues = {
   variants: VariantRow[];
   modifiers: ModifierRow[];
 };
-
-function SectionHint({
-  title,
-  description,
-  action,
-}: {
-  title: string;
-  description: string;
-  action: ReactNode;
-}) {
-  return (
-    <div className="flex flex-wrap items-start justify-between gap-2">
-      <div>
-        <p className="text-xs font-semibold text-zinc-800">{title}</p>
-        <p className="mt-0.5 text-[11px] leading-4 text-zinc-500">
-          {description}
-        </p>
-      </div>
-      {action}
-    </div>
-  );
-}
 
 export function ItemForm({
   mode,
@@ -97,14 +84,41 @@ export function ItemForm({
   const categoryId = values?.categoryId ?? defaultCategoryId ?? "";
   const key = values?.id ?? "new";
 
+  const handleAddVariant = () => {
+    setVariants((rows) => addRow(rows, createVariantRow()));
+  };
+  const handleUpdateVariant = (index: number, patch: Partial<VariantRow>) => {
+    setVariants((rows) => updateRow(rows, index, patch));
+  };
+  const handleRemoveVariant = (index: number) => {
+    setVariants((rows) => removeRowAt(rows, index));
+  };
+  const handleAddModifier = () => {
+    setModifiers((rows) => addRow(rows, createModifierRow()));
+  };
+  const handleUpdateModifier = (index: number, patch: Partial<ModifierRow>) => {
+    setModifiers((rows) => updateRow(rows, index, patch));
+  };
+  const handleRemoveModifier = (index: number) => {
+    setModifiers((rows) => removeRowAt(rows, index));
+  };
+
   return (
     <div className="space-y-3">
       <form ref={formRef} action={formAction} className="space-y-5">
         <input type="hidden" name="restaurantId" value={restaurantId} />
         <input type="hidden" name="menuId" value={menuId} />
         {values?.id ? <input type="hidden" name="itemId" value={values.id} /> : null}
-        <input type="hidden" name="variants" value={JSON.stringify(variants)} />
-        <input type="hidden" name="modifiers" value={JSON.stringify(modifiers)} />
+        <input
+          type="hidden"
+          name="variants"
+          value={serializeVariantRows(variants)}
+        />
+        <input
+          type="hidden"
+          name="modifiers"
+          value={serializeModifierRows(modifiers)}
+        />
 
         {state.error ? <Notice tone="error">{state.error}</Notice> : null}
         {state.success ? <Notice tone="success">{state.success}</Notice> : null}
@@ -222,192 +236,19 @@ export function ItemForm({
           </Field>
         </div>
 
-        <fieldset className="rounded-xl border border-zinc-200 bg-zinc-50/40 p-4">
-          <SectionHint
-            title="Variants"
-            description="Sizes or servings with their own price, e.g. Regular and Large."
-            action={
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setVariants((rows) => [...rows, { name: "", price: "" }])
-                }
-              >
-                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                Add variant
-              </Button>
-            }
-          />
+        <VariantsEditor
+          rows={variants}
+          onAdd={handleAddVariant}
+          onUpdate={handleUpdateVariant}
+          onRemove={handleRemoveVariant}
+        />
 
-          {variants.length > 0 ? (
-            <div className="mt-3 space-y-2">
-              <div className="hidden gap-2 px-1 text-[11px] font-medium uppercase tracking-wide text-zinc-400 sm:grid sm:grid-cols-[minmax(0,1fr)_8rem_2rem]">
-                <span>Name</span>
-                <span>Price (PHP)</span>
-                <span />
-              </div>
-              {variants.map((variant, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-[minmax(0,1fr)_2rem] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_2rem]"
-                >
-                  <Input
-                    value={variant.name}
-                    onChange={(event) =>
-                      setVariants((rows) =>
-                        rows.map((row, rowIndex) =>
-                          rowIndex === index
-                            ? { ...row, name: event.target.value }
-                            : row,
-                        ),
-                      )
-                    }
-                    className="py-2"
-                    placeholder="Regular"
-                    aria-label={`Variant ${index + 1} name`}
-                  />
-                  <Input
-                    value={variant.price}
-                    onChange={(event) =>
-                      setVariants((rows) =>
-                        rows.map((row, rowIndex) =>
-                          rowIndex === index
-                            ? { ...row, price: event.target.value }
-                            : row,
-                        ),
-                      )
-                    }
-                    className="col-start-1 py-2 sm:col-start-auto"
-                    placeholder="185.00"
-                    inputMode="decimal"
-                    aria-label={`Variant ${index + 1} price`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setVariants((rows) =>
-                        rows.filter((_, rowIndex) => rowIndex !== index),
-                      )
-                    }
-                    className="col-start-2 row-start-1 flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-red-50 hover:text-red-600 sm:col-start-auto sm:row-start-auto"
-                    aria-label={`Remove variant ${index + 1}`}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-3 text-xs text-zinc-500">
-              No variants yet. The base price will be used.
-            </p>
-          )}
-        </fieldset>
-
-        <fieldset className="rounded-xl border border-zinc-200 bg-zinc-50/40 p-4">
-          <SectionHint
-            title="Add-ons"
-            description="Optional extras with an additional price, e.g. Extra rice."
-            action={
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setModifiers((rows) => [
-                    ...rows,
-                    { name: "", price: "", isAvailable: true },
-                  ])
-                }
-              >
-                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                Add add-on
-              </Button>
-            }
-          />
-
-          {modifiers.length > 0 ? (
-            <div className="mt-3 space-y-2">
-              <div className="hidden gap-2 px-1 text-[11px] font-medium uppercase tracking-wide text-zinc-400 sm:grid sm:grid-cols-[minmax(0,1fr)_7rem_5rem_2rem]">
-                <span>Name</span>
-                <span>Extra price</span>
-                <span>Available</span>
-                <span />
-              </div>
-              {modifiers.map((modifier, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-[minmax(0,1fr)_2rem] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_5rem_2rem]"
-                >
-                  <Input
-                    value={modifier.name}
-                    onChange={(event) =>
-                      setModifiers((rows) =>
-                        rows.map((row, rowIndex) =>
-                          rowIndex === index
-                            ? { ...row, name: event.target.value }
-                            : row,
-                        ),
-                      )
-                    }
-                    className="py-2"
-                    placeholder="Extra rice"
-                    aria-label={`Add-on ${index + 1} name`}
-                  />
-                  <Input
-                    value={modifier.price}
-                    onChange={(event) =>
-                      setModifiers((rows) =>
-                        rows.map((row, rowIndex) =>
-                          rowIndex === index
-                            ? { ...row, price: event.target.value }
-                            : row,
-                        ),
-                      )
-                    }
-                    className="col-start-1 py-2 sm:col-start-auto"
-                    placeholder="25.00"
-                    inputMode="decimal"
-                    aria-label={`Add-on ${index + 1} price`}
-                  />
-                  <label className="col-start-1 flex items-center gap-1.5 text-xs text-zinc-600 sm:col-start-auto">
-                    <input
-                      type="checkbox"
-                      checked={modifier.isAvailable}
-                      onChange={(event) =>
-                        setModifiers((rows) =>
-                          rows.map((row, rowIndex) =>
-                            rowIndex === index
-                              ? { ...row, isAvailable: event.target.checked }
-                              : row,
-                          ),
-                        )
-                      }
-                      className="h-4 w-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-600/40"
-                    />
-                    Available
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setModifiers((rows) =>
-                        rows.filter((_, rowIndex) => rowIndex !== index),
-                      )
-                    }
-                    className="col-start-2 row-start-1 flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-red-50 hover:text-red-600 sm:col-start-auto sm:row-start-auto"
-                    aria-label={`Remove add-on ${index + 1}`}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-3 text-xs text-zinc-500">No add-ons yet.</p>
-          )}
-        </fieldset>
+        <ModifiersEditor
+          rows={modifiers}
+          onAdd={handleAddModifier}
+          onUpdate={handleUpdateModifier}
+          onRemove={handleRemoveModifier}
+        />
 
         <div className="border-t border-zinc-100 pt-4">
           <Button type="submit" isLoading={pending} loadingLabel="Saving...">
