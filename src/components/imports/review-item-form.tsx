@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 import { updateImportItemAction } from "@/app/dashboard/restaurants/[id]/imports/actions";
-import { Badge } from "@/components/ui/badge";
+import { ReviewItemIndicators } from "@/components/imports/review/review-item-indicators";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -12,37 +12,10 @@ import { Notice } from "@/components/ui/notice";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { EMPTY_FORM_STATE } from "@/lib/action-state";
+import type { ReviewItem } from "@/lib/import-review-view";
 import { formatMinorForInput, formatPrice } from "@/lib/money";
 
-const changeLabels: Record<string, string> = {
-  new: "New item",
-  price_changed: "Price changed",
-  description_changed: "Description changed",
-  availability_changed: "Availability changed",
-  unchanged: "Unchanged",
-};
-
-export type ReviewItem = {
-  id: string;
-  pageNumber: number | null;
-  categoryName: string;
-  name: string;
-  description: string | null;
-  basePriceMinor: number | null;
-  currency: string;
-  variants: { name: string; priceMinor: number | null }[];
-  modifiers: {
-    name: string;
-    additionalPriceMinor: number | null;
-    isAvailable: boolean;
-  }[];
-  availabilityStatus: "available" | "unavailable";
-  confidence: number | null;
-  needsReview: boolean;
-  changeType: string;
-  decision: "pending" | "accept" | "reject";
-  duplicateName: string | null;
-};
+export type { ReviewItem };
 
 export function ImportItemReviewForm({
   restaurantId,
@@ -61,7 +34,6 @@ export function ImportItemReviewForm({
     null,
   );
   const decided = item.decision !== "pending";
-  const lowConfidence = (item.confidence ?? 0) < 70;
   const hasErrors =
     Boolean(state.error) ||
     Object.keys(state.fieldErrors ?? {}).length > 0;
@@ -83,52 +55,7 @@ export function ImportItemReviewForm({
       <input type="hidden" name="importId" value={importId} />
       <input type="hidden" name="itemId" value={item.id} />
 
-      <div className="flex flex-wrap items-center gap-2 text-[11px]">
-        <Badge tone="neutral">
-          {changeLabels[item.changeType] ?? item.changeType}
-        </Badge>
-        <Badge tone={lowConfidence ? "danger" : "success"}>
-          {item.confidence ?? "?"}% confidence
-        </Badge>
-        {item.needsReview ? <Badge tone="warning">Needs review</Badge> : null}
-        {item.pageNumber ? (
-          <span className="text-zinc-400">Page {item.pageNumber}</span>
-        ) : null}
-        {item.duplicateName ? (
-          <Badge tone="warning">
-            Possible duplicate of “{item.duplicateName}”
-          </Badge>
-        ) : null}
-        <Badge
-          tone={
-            item.decision === "accept"
-              ? "success"
-              : item.decision === "reject"
-                ? "neutral"
-                : "warning"
-          }
-          className="ml-auto"
-        >
-          {item.decision}
-        </Badge>
-      </div>
-
-      <div className="mt-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-zinc-900">
-            {item.name || "Untitled item"}
-          </p>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            {item.categoryName}
-            <span className="text-zinc-300"> · </span>
-            {item.basePriceMinor !== null
-              ? formatPrice(item.basePriceMinor, item.currency)
-              : item.variants.length > 0
-                ? "Varies"
-                : "No price"}
-          </p>
-        </div>
-      </div>
+      <ReviewItemIndicators item={item} />
 
       <details
         open={(item.needsReview && item.decision === "pending") || hasErrors}
