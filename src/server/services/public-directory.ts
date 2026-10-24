@@ -5,27 +5,27 @@ import {
   desc,
   eq,
   ilike,
-  inArray,
   isNotNull,
   or,
 } from "drizzle-orm";
 
 import type { DbClient } from "@/db/client";
-import {
-  menuCategories,
-  menuItems,
-  menus,
-  restaurants,
-} from "@/db/schema";
-import type { MenuRecord } from "./menu-tree";
-import { loadMenuTree } from "./menu-tree";
+import { menus, restaurants } from "@/db/schema";
+import type {
+  MenuRecord,
+  MenuTreeCategory,
+} from "./menu-tree";
+import { loadMenuTree, loadMenuTreesForRecords } from "./menu-tree";
 
 export type PublicRestaurantCard = {
   restaurant: typeof restaurants.$inferSelect;
   publishedMenuCount: number;
 };
 
-export type PublicMenuCard = MenuRecord & { itemCount: number };
+export type PublicMenu = MenuRecord & {
+  categories: MenuTreeCategory[];
+  itemCount: number;
+};
 
 function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, "\\$&");
@@ -121,30 +121,21 @@ export async function getPublicRestaurant(
     )
     .orderBy(desc(menus.publishedAt), asc(menus.title));
 
-  const menuIds = publishedMenus.map((menu) => menu.id);
-  const counts =
-    menuIds.length > 0
-      ? await db
-          .select({
-            menuId: menuCategories.menuId,
-            total: count(menuItems.id),
-          })
-          .from(menuCategories)
-          .leftJoin(
-            menuItems,
-            eq(menuItems.categoryId, menuCategories.id),
-          )
-          .where(inArray(menuCategories.menuId, menuIds))
-          .groupBy(menuCategories.menuId)
-      : [];
-  const countsByMenu = new Map(
-    counts.map((row) => [row.menuId, row.total] as const),
-  );
+  const trees = await loadMenuTreesForRecords(db, publishedMenus);
 
-  const menuCards: PublicMenuCard[] = publishedMenus.map((menu) => ({
-    ...menu,
-    itemCount: countsByMenu.get(menu.id) ?? 0,
-  }));
+  const menuCards: PublicMenu[] = publishedMenus.map((menu) => {
+    const categories = trees.get(menu.id)?.categories ?? [];
+    const itemCount = categories.reduce(
+      (total, category) => total + category.items.length,
+      0,
+    );
+
+    return {
+      ...menu,
+      categories,
+      itemCount,
+    };
+  });
 
   return { restaurant, menus: menuCards };
 }

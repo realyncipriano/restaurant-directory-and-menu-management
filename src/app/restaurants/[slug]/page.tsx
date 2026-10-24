@@ -1,6 +1,6 @@
 import {
-  ArrowRight,
   CalendarClock,
+  ExternalLink,
   Mail,
   MapPin,
   Phone,
@@ -12,6 +12,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { cache } from "react";
 
+import { MenuContent } from "@/components/public/menu-content";
 import { SiteShell } from "@/components/public/site-shell";
 import { getDb } from "@/db/client";
 import { serializeJsonLd } from "@/lib/json-ld";
@@ -208,35 +209,75 @@ export default async function PublicRestaurantPage({
               </p>
             </div>
           ) : (
-            <div className="mt-5 space-y-3">
-              {menus.map((menu) => (
-                <Link
-                  key={menu.id}
-                  href={`/restaurants/${restaurant.slug}/menus/${menu.slug}`}
-                  className="group flex items-start justify-between gap-4 rounded-xl border border-zinc-200/90 bg-white p-5 transition hover:border-amber-300 hover:shadow-md"
+            <div className="mt-5">
+              {menus.length > 1 ? (
+                <nav
+                  aria-label="Menus on this page"
+                  className="sticky top-0 z-20 -mx-4 mb-6 border-b border-zinc-200 bg-zinc-50/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6"
                 >
-                  <div>
-                    <h3 className="text-base font-semibold text-zinc-900 group-hover:text-amber-800">
-                      {menu.title}
-                    </h3>
-                    {menu.description ? (
-                      <p className="mt-1 line-clamp-2 text-sm leading-6 text-zinc-600">
-                        {menu.description}
-                      </p>
-                    ) : null}
-                    <p className="mt-2 text-xs text-zinc-500">
-                      {menu.itemCount} item{menu.itemCount === 1 ? "" : "s"}
-                      {menu.publishedAt
-                        ? ` · Updated ${dateFormatter.format(menu.publishedAt)}`
-                        : ""}
-                    </p>
-                  </div>
-                  <ArrowRight
-                    className="mt-1 h-4 w-4 shrink-0 text-zinc-400 group-hover:text-amber-700"
-                    aria-hidden="true"
-                  />
-                </Link>
-              ))}
+                  <ul className="flex gap-1 overflow-x-auto [scrollbar-width:none]">
+                    {menus.map((menu) => (
+                      <li key={menu.id} className="shrink-0">
+                        <a
+                          href={`#menu-${menu.id}`}
+                          className="block rounded-full px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-white hover:text-zinc-900 hover:ring-1 hover:ring-zinc-200"
+                        >
+                          {menu.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
+              ) : null}
+
+              <div className="space-y-12">
+                {menus.map((menu) => (
+                  <section
+                    key={menu.id}
+                    id={`menu-${menu.id}`}
+                    className="scroll-mt-20"
+                  >
+                    <div className="border-b border-zinc-200 pb-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-serif text-2xl font-medium tracking-tight text-zinc-900">
+                            {menu.title}
+                          </h3>
+                          <p className="mt-1 text-sm text-zinc-500">
+                            {menu.itemCount} item
+                            {menu.itemCount === 1 ? "" : "s"}
+                            {menu.publishedAt
+                              ? ` · Updated ${dateFormatter.format(menu.publishedAt)}`
+                              : ""}
+                          </p>
+                        </div>
+                        <Link
+                          href={`/restaurants/${restaurant.slug}/menus/${menu.slug}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-900"
+                        >
+                          Open standalone menu
+                          <ExternalLink
+                            className="h-3.5 w-3.5"
+                            aria-hidden="true"
+                          />
+                        </Link>
+                      </div>
+                      {menu.description ? (
+                        <p className="mt-3 max-w-2xl whitespace-pre-line text-sm leading-6 text-zinc-600">
+                          {menu.description}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-6">
+                      <MenuContent
+                        categories={menu.categories}
+                        headingLevel={4}
+                      />
+                    </div>
+                  </section>
+                ))}
+              </div>
             </div>
           )}
         </section>

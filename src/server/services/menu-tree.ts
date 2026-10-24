@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, inArray } from "drizzle-orm";
 
 import {
   menuCategories,
@@ -29,21 +29,38 @@ export type MenuTree = {
   categories: MenuTreeCategory[];
 };
 
-export async function loadMenuTree(
+export type MenuTreeMap = Map<string, MenuTree>;
+
+export async function loadMenuTrees(
   db: DbExecutor,
-  menuId: string,
-): Promise<MenuTree | null> {
-  const [menu] = await db
+  menuIds: string[],
+): Promise<MenuTreeMap> {
+  if (menuIds.length === 0) return new Map();
+
+  const menuRecords = await db
     .select()
     .from(menus)
-    .where(eq(menus.id, menuId))
-    .limit(1);
-  if (!menu) return null;
+    .where(inArray(menus.id, menuIds));
 
+  return loadMenuTreesForRecords(db, menuRecords);
+}
+
+export async function loadMenuTreesForRecords(
+  db: DbExecutor,
+  menuRecords: MenuRecord[],
+): Promise<MenuTreeMap> {
+  const trees: MenuTreeMap = new Map();
+  if (menuRecords.length === 0) return trees;
+
+  for (const menu of menuRecords) {
+    trees.set(menu.id, { menu, categories: [] });
+  }
+
+  const menuIds = menuRecords.map((menu) => menu.id);
   const categories = await db
     .select()
     .from(menuCategories)
-    .where(eq(menuCategories.menuId, menuId))
+    .where(inArray(menuCategories.menuId, menuIds))
     .orderBy(asc(menuCategories.sortOrder), asc(menuCategories.name));
 
   const categoryIds = categories.map((category) => category.id);
@@ -102,11 +119,20 @@ export async function loadMenuTree(
     itemsByCategory.set(item.categoryId, list);
   }
 
-  return {
-    menu,
-    categories: categories.map((category) => ({
+  for (const category of categories) {
+    trees.get(category.menuId)?.categories.push({
       ...category,
       items: itemsByCategory.get(category.id) ?? [],
-    })),
-  };
+    });
+  }
+
+  return trees;
+}
+
+export async function loadMenuTree(
+  db: DbExecutor,
+  menuId: string,
+): Promise<MenuTree | null> {
+  const tree = (await loadMenuTrees(db, [menuId])).get(menuId);
+  return tree ?? null;
 }

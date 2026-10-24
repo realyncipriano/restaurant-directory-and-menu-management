@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { DbClient } from "@/db/client";
+import { menus } from "@/db/schema";
 import {
   getPublicMenu,
   getPublicRestaurant,
@@ -25,7 +26,11 @@ import type { ItemInput } from "@/lib/validation/menu";
 import type { EphemeralDb } from "./ephemeral-db";
 import { openTestDb, resetTestDb, seedUser } from "../helpers/db";
 
-function item(categoryId: string, name: string): ItemInput {
+function item(
+  categoryId: string,
+  name: string,
+  overrides: Partial<ItemInput> = {},
+): ItemInput {
   return {
     categoryId,
     name,
@@ -35,6 +40,7 @@ function item(categoryId: string, name: string): ItemInput {
     sortOrder: 0,
     variants: [],
     modifiers: [],
+    ...overrides,
   };
 }
 
@@ -73,7 +79,21 @@ describe("public directory queries (ephemeral PGlite)", () => {
     const category = await createCategory(db, admin.id, menu.id, {
       name: "Mains",
     });
-    await createMenuItem(db, admin.id, menu.id, item(category.id, "Adobo"));
+    await createMenuItem(
+      db,
+      admin.id,
+      menu.id,
+      item(category.id, "Adobo", {
+        variants: [
+          { name: "Regular", price: 9000 },
+          { name: "Large", price: 12000 },
+        ],
+        modifiers: [
+          { name: "Extra rice", price: 2500, isAvailable: true },
+          { name: "Egg", price: 1500, isAvailable: false },
+        ],
+      }),
+    );
     await publishMenu(db, admin.id, menu.id);
 
     return { admin, restaurant, menu };
@@ -121,10 +141,112 @@ describe("public directory queries (ephemeral PGlite)", () => {
     expect(detail?.menus).toHaveLength(1);
     expect(detail?.menus[0]?.id).toBe(menu.id);
     expect(detail?.menus[0]?.itemCount).toBe(1);
+    expect(detail?.menus[0]?.categories.map((category) => category.name)).toEqual([
+      "Mains",
+    ]);
+
+    const adobo = detail?.menus[0]?.categories[0]?.items[0];
+    expect(adobo?.name).toBe("Adobo");
+    expect(adobo?.variants.map((variant) => variant.name)).toEqual([
+      "Regular",
+      "Large",
+    ]);
+    expect(adobo?.modifiers.map((modifier) => modifier.name)).toEqual([
+      "Extra rice",
+      "Egg",
+    ]);
+    expect(adobo?.modifiers[1]?.isAvailable).toBe(false);
     expect(detail?.menus.some((entry) => entry.id === draft.id)).toBe(false);
 
     await setRestaurantArchived(db, admin.id, restaurant.id, true);
     expect(await getPublicRestaurant(db, restaurant.slug)).toBeNull();
+  });
+
+  it("returns every published menu with ordered categories and items", async () => {
+    const { admin, restaurant, menu } = await seedPublishedRestaurant();
+    const dinner = await createMenu(db, admin.id, restaurant.id, {
+      title: "Dinner",
+    });
+    await createCategory(db, admin.id, dinner.id, {
+      name: "Specials",
+      sortOrder: 0,
+    });
+    const mains = await createCategory(db, admin.id, dinner.id, {
+      name: "Mains",
+      sortOrder: 1,
+    });
+    const drinks = await createCategory(db, admin.id, dinner.id, {
+      name: "Drinks",
+      sortOrder: 2,
+    });
+    await createMenuItem(
+      db,
+      admin.id,
+      dinner.id,
+      item(mains.id, "Sinigang", { sortOrder: 1, basePrice: 15000 }),
+    );
+    await createMenuItem(
+      db,
+      admin.id,
+      dinner.id,
+      item(mains.id, "Kare-kare", { sortOrder: 0, basePrice: 18000 }),
+    );
+    await createMenuItem(
+      db,
+      admin.id,
+      dinner.id,
+      item(drinks.id, "Juice", {
+        sortOrder: 0,
+        availabilityStatus: "unavailable",
+      }),
+    );
+    await publishMenu(db, admin.id, dinner.id);
+
+    const detail = await getPublicRestaurant(db, restaurant.slug);
+    expect(detail?.menus).toHaveLength(2);
+
+    const mainMenu = detail?.menus.find((entry) => entry.id === menu.id);
+    const dinnerMenu = detail?.menus.find((entry) => entry.id === dinner.id);
+
+    expect(mainMenu?.itemCount).toBe(1);
+    expect(dinnerMenu?.categories.map((category) => category.name)).toEqual([
+      "Specials",
+      "Mains",
+      "Drinks",
+    ]);
+    expect(dinnerMenu?.categories[0]?.items).toEqual([]);
+    expect(
+      dinnerMenu?.categories[1]?.items.map((entry) => entry.name),
+    ).toEqual(["Kare-kare", "Sinigang"]);
+    expect(dinnerMenu?.categories[2]?.items[0]?.availabilityStatus).toBe(
+      "unavailable",
+    );
+    expect(dinnerMenu?.itemCount).toBe(3);
+  });
+
+  it("includes published menus without categories", async () => {
+    const { admin, restaurant } = await seedPublishedRestaurant();
+    const [emptyMenu] = await db
+      .insert(menus)
+      .values({
+        restaurantId: restaurant.id,
+        title: "Specials",
+        slug: "specials",
+        status: "published",
+        publishedAt: new Date(),
+        lastUpdatedAt: new Date(),
+        createdBy: admin.id,
+      })
+      .returning();
+    expect(emptyMenu).toBeDefined();
+
+    const detail = await getPublicRestaurant(db, restaurant.slug);
+    const entry = detail?.menus.find(
+      (menuEntry) => menuEntry.id === emptyMenu?.id,
+    );
+
+    expect(entry?.categories).toEqual([]);
+    expect(entry?.itemCount).toBe(0);
   });
 
   it("serves published menus and rejects drafts or archived parents", async () => {
