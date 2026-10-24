@@ -9,7 +9,6 @@ export { startEditingMenu } from "./menus/drafts";
 export { publishMenu } from "./menus/publish";
 
 export {
-  getMenuContextForRestaurant,
   getMenuManagement,
   listMenusForRestaurant,
   type MenuLineageSummary,

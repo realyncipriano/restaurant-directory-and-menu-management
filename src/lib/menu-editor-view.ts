@@ -1,5 +1,8 @@
+import { countLabel, itemCountLabel } from "@/lib/count-label";
 import type { ModifierRow, VariantRow } from "@/lib/menu-item-rows";
 import { formatMinorForInput } from "@/lib/money";
+
+export { countLabel, itemCountLabel };
 
 export type MenuStatusTone = "warning" | "success" | "neutral";
 
@@ -171,26 +174,10 @@ export function nextCategorySortOrder(categoryCount: number): number {
   return (categoryCount + 1) * 10;
 }
 
-export function countLabel(
-  count: number,
-  singular: string,
-  plural = `${singular}s`,
-): string {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
-export function itemCountLabel(count: number): string {
-  return countLabel(count, "item");
-}
-
 export function variantCountLabel(count: number): string {
   return countLabel(count, "variant");
 }
 
 export function addOnCountLabel(count: number): string {
   return countLabel(count, "add-on");
-}
-
-export function categoryCountLabel(count: number): string {
-  return countLabel(count, "category", "categories");
 }

@@ -14,6 +14,7 @@ import { cache } from "react";
 
 import { SiteShell } from "@/components/public/site-shell";
 import { getDb } from "@/db/client";
+import { serializeJsonLd } from "@/lib/json-ld";
 import { getPublicImageUrl } from "@/server/services/images";
 import { getPublicRestaurant } from "@/server/services/public-directory";
 
@@ -90,7 +91,7 @@ export default async function PublicRestaurantPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+          __html: serializeJsonLd(jsonLd),
         }}
       />
 

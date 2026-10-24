@@ -18,10 +18,7 @@ import {
 import { NotFoundError } from "@/lib/errors";
 import { requireMenuPermission } from "../menu-access";
 import { loadMenuTree, type MenuRecord } from "../menu-tree";
-import {
-  getRestaurantAccess,
-  requireRestaurantPermission,
-} from "../restaurant-access";
+import { requireRestaurantPermission } from "../restaurant-access";
 
 export type MenuLineageSummary = {
   lineageId: string;
@@ -139,13 +136,4 @@ export async function getMenuManagement(
     .limit(50);
 
   return { menu, access, tree, versions, changes };
-}
-
-export async function getMenuContextForRestaurant(
-  db: DbClient,
-  actorId: string,
-  restaurantId: string,
-) {
-  const access = await getRestaurantAccess(db, actorId, restaurantId);
-  return access;
 }

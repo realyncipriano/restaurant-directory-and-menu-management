@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import { itemCountLabel } from "@/lib/count-label";
 import {
   buildCategoryHref,
   buildImportReviewView,
   formatReviewItemPrice,
   importChangeLabel,
   isLowConfidence,
-  itemCountLabel,
   type ImportReviewSourceItem,
 } from "@/lib/import-review-view";
 

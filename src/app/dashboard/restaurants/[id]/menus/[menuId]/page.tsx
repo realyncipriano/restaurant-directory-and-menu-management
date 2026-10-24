@@ -17,7 +17,13 @@ import { buttonClass } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { requireCurrentUser } from "@/lib/auth/guards";
 import { NotFoundError } from "@/lib/errors";
-import { buildCategoryOptions } from "@/lib/menu-editor-view";
+import {
+  buildCategoryOptions,
+  buildMenuEditorMessages,
+  deriveMenuEditorFlags,
+  menuStatusTone,
+  nextCategorySortOrder,
+} from "@/lib/menu-editor-view";
 import { isImageStorageConfigured } from "@/server/services/images";
 import { getMenuManagement } from "@/server/services/menus";
 
@@ -37,7 +43,7 @@ export default async function MenuEditorPage({
   }>;
 }) {
   const user = await requireCurrentUser();
-  const { menuId } = await params;
+  const { id, menuId } = await params;
   const query = await searchParams;
 
   let data;
@@ -49,50 +55,25 @@ export default async function MenuEditorPage({
   }
 
   const { menu, access, tree, versions, changes } = data;
+  if (menu.restaurantId !== id) notFound();
+
   const { restaurant, flags } = access;
   const notice = typeof query.notice === "string" ? query.notice : undefined;
   const error = typeof query.error === "string" ? query.error : undefined;
-  const isDraft = menu.status === "draft";
-  const restaurantActive = restaurant.status === "active";
-  const canEdit = flags.canEditMenu && restaurantActive;
-  const canPublish = flags.canPublishMenu && restaurantActive && isDraft;
+  const { isDraft, restaurantActive, canEdit, canPublish } =
+    deriveMenuEditorFlags({
+      canEditMenu: flags.canEditMenu,
+      canPublishMenu: flags.canPublishMenu,
+      restaurantStatus: restaurant.status,
+      menuStatus: menu.status,
+    });
   const imageStorageConfigured = isImageStorageConfigured();
   const categoryOptions = buildCategoryOptions(tree.categories);
-
-  const statusTone =
-    menu.status === "draft"
-      ? "warning"
-      : menu.status === "published"
-        ? "success"
-        : "neutral";
-
-  const noticeMessage =
-    notice === "settings"
-      ? "Menu details saved."
-      : notice === "draft"
-        ? "Draft revision created. The published menu is unchanged until you publish."
-        : notice === "published"
-          ? "Menu published. The previous version was archived."
-          : notice === "category-deleted"
-            ? "Category deleted from this draft."
-            : notice === "item-deleted"
-              ? "Menu item deleted from this draft."
-              : notice === "import-applied"
-                ? "Accepted scan items were applied to this draft. Review the menu before publishing."
-                : null;
-
-  const errorMessage =
-    error === "draft"
-      ? "A draft revision could not be created. Check that this menu still has a published version."
-      : error === "discard"
-        ? "The draft could not be discarded."
-        : error === "delete-category"
-          ? "The category could not be deleted."
-          : error === "delete-item"
-            ? "The menu item could not be deleted."
-            : error
-              ? "The action could not be completed. Please try again."
-              : null;
+  const statusTone = menuStatusTone(menu.status);
+  const { noticeMessage, errorMessage } = buildMenuEditorMessages({
+    notice,
+    error,
+  });
 
   return (
     <div className="space-y-6">
@@ -187,7 +168,7 @@ export default async function MenuEditorPage({
             <MenuAddCategorySection
               restaurantId={restaurant.id}
               menuId={menu.id}
-              defaultSortOrder={(tree.categories.length + 1) * 10}
+              defaultSortOrder={nextCategorySortOrder(tree.categories.length)}
             />
           ) : null}
 

@@ -7,6 +7,7 @@ import { cache } from "react";
 
 import { SiteShell } from "@/components/public/site-shell";
 import { getDb } from "@/db/client";
+import { serializeJsonLd } from "@/lib/json-ld";
 import { formatPrice } from "@/lib/money";
 import { getPublicImageUrl } from "@/server/services/images";
 import { getPublicMenu } from "@/server/services/public-directory";
@@ -89,7 +90,7 @@ export default async function PublicMenuPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+          __html: serializeJsonLd(jsonLd),
         }}
       />
 

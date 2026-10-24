@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import { countLabel, itemCountLabel } from "@/lib/count-label";
 import {
   addOnCountLabel,
   buildCategoryOptions,
   buildMenuEditorMessages,
-  categoryCountLabel,
-  countLabel,
   deriveMenuEditorFlags,
-  itemCountLabel,
   menuEditorErrorMessage,
   menuEditorNoticeMessage,
   menuStatusTone,
@@ -304,7 +302,5 @@ describe("menu editor defaults and labels", () => {
     expect(variantCountLabel(2)).toBe("2 variants");
     expect(addOnCountLabel(1)).toBe("1 add-on");
     expect(addOnCountLabel(2)).toBe("2 add-ons");
-    expect(categoryCountLabel(1)).toBe("1 category");
-    expect(categoryCountLabel(2)).toBe("2 categories");
   });
 });

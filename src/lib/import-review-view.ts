@@ -1,4 +1,7 @@
+import { itemCountLabel } from "@/lib/count-label";
 import { formatPrice } from "@/lib/money";
+
+export { itemCountLabel };
 
 export type ReviewItem = {
   id: string;
@@ -133,10 +136,6 @@ function needsReviewFirst(items: ReviewItem[]): ReviewItem[] {
         left.index - right.index,
     )
     .map(({ item }) => item);
-}
-
-export function itemCountLabel(count: number): string {
-  return `${count} item${count === 1 ? "" : "s"}`;
 }
 
 export function importChangeLabel(value: string): string {
