@@ -83,13 +83,28 @@ database.
 
 ## Testing
 
+The suites use three separate Vitest configurations:
+
+| Command | Configuration | Scope |
+| --- | --- | --- |
+| `npm test` / `npm run test:watch` | `vitest.unit.config.mts` | Unit tests in `tests/unit`; no database or external services. |
+| `npm run test:db` | `vitest.db.config.mts` | Migrations and constraints in `tests/db` using an in-process PGlite database. Does not use `.env.local` or require Neon credentials. |
+| `npm run test:integration` | `vitest.config.mts` | Guarded Neon integration tests in `tests/integration`; loads `.env.local` and may migrate the disposable test database. |
+
+`vitest.config.mts` is also the default Vitest configuration, so a bare
+`npx vitest` runs the guarded integration suite rather than the unit or PGlite
+suites. Use the npm scripts above.
+
+Run linting, type checking, unit tests, PGlite tests, and a production build in
+one step:
+
 ```bash
-npm run lint
-npm run typecheck
-npm test          # unit tests
-npm run test:db   # migrations + constraints on ephemeral PGlite
-npm run test:integration  # only with a verified disposable test database
+npm run verify
 ```
+
+`verify` does not run the Neon integration suite or require an external test
+database. Run `npm run test:integration` separately, and only after configuring
+the safeguards in [Database safety](#database-safety).
 
 ## Optional integrations
 
