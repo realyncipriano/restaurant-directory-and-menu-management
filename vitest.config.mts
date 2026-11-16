@@ -39,6 +39,6 @@ export default defineConfig({
     env: {
       DEV_DATABASE_URLS: devUrls.join(","),
     },
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/integration/**/*.test.ts"],
   },
 });
