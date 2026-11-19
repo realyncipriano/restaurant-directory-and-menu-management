@@ -3,17 +3,12 @@ import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { defineConfig } from "vitest/config";
 
+import { collectDevUrls } from "./src/db/safety";
+
 loadEnv({ path: ".env.local", quiet: true });
 loadEnv({ quiet: true });
 
-const devUrls = [
-  process.env.DATABASE_URL,
-  process.env.DATABASE_URL_DIRECT,
-  process.env.NEON_BRANCH_URL_POOLED,
-  process.env.NEON_BRANCH_URL_DIRECT,
-]
-  .map((value) => value?.trim())
-  .filter((value): value is string => Boolean(value));
+const devUrls = collectDevUrls(process.env);
 
 export default defineConfig({
   resolve: {

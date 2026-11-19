@@ -15,4 +15,5 @@ export {
   deactivateUser,
   listUsers,
   reactivateUser,
+  setUserRole,
 } from "./auth/user-admin";

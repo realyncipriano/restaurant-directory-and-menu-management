@@ -4,6 +4,7 @@ import { UserPlus, Users } from "lucide-react";
 import { getDb } from "@/db/client";
 import { InviteForm } from "@/components/dashboard/invite-form";
 import { ResetLinkForm } from "@/components/dashboard/reset-link-form";
+import { RoleChangeForm } from "@/components/dashboard/role-change-form";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -27,6 +28,34 @@ const statusTones: Record<string, BadgeTone> = {
   deactivated: "neutral",
 };
 
+const errorMessages: Record<string, string> = {
+  role_self: "You cannot change your own role.",
+  role_inactive:
+    "Activate or reactivate that account before changing its role.",
+  role_passwordless:
+    "That account needs a password before its role can be changed.",
+  role_last_admin:
+    "At least one active administrator must remain. Promote another administrator before removing this one.",
+  role_invalid:
+    "That role is not valid. Choose administrator or authorized user.",
+  role_state:
+    "That account changed while the request was running. Refresh the page and try again.",
+  role_conflict:
+    "That role change conflicts with the current account state. Refresh the page and try again.",
+  deactivate_self: "You cannot deactivate your own account.",
+  deactivate_last_admin:
+    "At least one active administrator must remain. Promote another administrator before deactivating this one.",
+  deactivate_state: "That account is no longer active.",
+  reactivate_state: "That account is not deactivated.",
+  reactivate_passwordless:
+    "That account has no password to reactivate. Send a new invitation instead.",
+  user_invalid: "That account reference is not valid.",
+  user_missing: "That account no longer exists.",
+  conflict:
+    "That change conflicts with the current account state. Refresh the page and try again.",
+  failed: "The action could not be completed. Please try again.",
+};
+
 function NoticeMessage({
   notice,
   error,
@@ -37,9 +66,28 @@ function NoticeMessage({
   if (error) {
     return (
       <Notice tone="error">
-        {error === "conflict"
-          ? "That change is not allowed. At least one active administrator must remain, and you cannot deactivate yourself."
-          : "The action could not be completed. Please try again."}
+        {errorMessages[error] ?? errorMessages.failed}
+      </Notice>
+    );
+  }
+  if (notice === "promoted") {
+    return (
+      <Notice tone="success">
+        Administrator access granted. The change takes effect immediately.
+      </Notice>
+    );
+  }
+  if (notice === "demoted") {
+    return (
+      <Notice tone="success">
+        Administrator access removed. The change takes effect immediately.
+      </Notice>
+    );
+  }
+  if (notice === "role_unchanged") {
+    return (
+      <Notice tone="info">
+        No change was needed. That account already has the selected role.
       </Notice>
     );
   }
@@ -149,6 +197,14 @@ export default async function UsersPage({
               </div>
 
               <div className="flex flex-wrap items-start gap-2 lg:justify-end">
+                {user.accountStatus === "active" && user.id !== admin.id ? (
+                  <RoleChangeForm
+                    userId={user.id}
+                    name={user.name}
+                    makeAdmin={user.role !== "admin"}
+                  />
+                ) : null}
+
                 {user.accountStatus === "active" ? (
                   <ResetLinkForm userId={user.id} />
                 ) : null}

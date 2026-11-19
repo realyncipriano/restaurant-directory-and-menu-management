@@ -1,5 +1,7 @@
 import "server-only";
 
+import { evaluateTestTarget } from "@/db/safety";
+
 export type R2Config = {
   accountId: string;
   accessKeyId: string;
@@ -29,46 +31,13 @@ function isTestRuntime(): boolean {
 }
 
 function requireSafeTestUrl(): string {
-  const testUrl = clean(process.env.TEST_DATABASE_URL);
-  if (!testUrl) {
+  const result = evaluateTestTarget(process.env);
+  if (!result.safe) {
     throw new Error(
-      "Integration tests require an explicitly configured TEST_DATABASE_URL pointing at a dedicated disposable database.",
+      `Refusing to use an unsafe test database: ${result.reason}`,
     );
   }
-
-  const devUrls = (process.env.DEV_DATABASE_URLS ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  if (devUrls.length === 0) {
-    throw new Error(
-      "Refusing to use a test database without DEV_DATABASE_URLS set for comparison. Run tests through npm run test:integration.",
-    );
-  }
-
-  const target = parseDbTarget(testUrl);
-  for (const devUrl of devUrls) {
-    const devTarget = parseDbTarget(devUrl);
-    if (target.host === devTarget.host && target.database === devTarget.database) {
-      throw new Error(
-        `Refusing to use the development database as a test target (${target.host}/${target.database}).`,
-      );
-    }
-  }
-
-  return testUrl;
-}
-
-export function parseDbTarget(connectionString: string): {
-  host: string;
-  database: string;
-} {
-  const url = new URL(connectionString);
-  return {
-    host: url.hostname.toLowerCase(),
-    database: url.pathname.replace(/^\//, "").toLowerCase(),
-  };
+  return result.connectionString;
 }
 
 export function getDatabaseUrl(): string {

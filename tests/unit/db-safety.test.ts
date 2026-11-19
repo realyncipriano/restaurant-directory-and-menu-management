@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assertSafeTestTarget,
+  collectDevUrls,
   evaluateTestTarget,
   maskConnectionString,
   parseConnectionTarget,
@@ -97,5 +99,53 @@ describe("database target safety", () => {
       }),
     );
     expect(result.safe).toBe(true);
+  });
+
+  it("blocks when any configured development URL matches the test target", () => {
+    const result = evaluateTestTarget(
+      env({
+        DATABASE_URL: undefined,
+        DATABASE_URL_DIRECT: undefined,
+        DEV_DATABASE_URLS: `postgresql://user:pass@other-dev.neon.tech/neondb,${DEV_URL}`,
+        TEST_DATABASE_URL: DEV_URL,
+      }),
+    );
+    expect(result.safe).toBe(false);
+    if (!result.safe) {
+      expect(result.reason).toContain("development database");
+      expect(result.reason).not.toContain("user");
+      expect(result.reason).not.toContain("pass");
+    }
+  });
+
+  it("blocks when a configured development URL is invalid", () => {
+    const result = evaluateTestTarget(
+      env({ DEV_DATABASE_URLS: "not-a-database-url" }),
+    );
+    expect(result.safe).toBe(false);
+    if (!result.safe) {
+      expect(result.reason).toContain("invalid");
+    }
+  });
+
+  it("collects every configured comparison URL", () => {
+    const urls = collectDevUrls({
+      DATABASE_URL: "postgresql://user:pass@one.example/neondb",
+      DATABASE_URL_DIRECT: "postgresql://user:pass@two.example/neondb",
+      NEON_BRANCH_URL_POOLED: "postgresql://user:pass@three.example/neondb",
+      NEON_BRANCH_URL_DIRECT: "postgresql://user:pass@four.example/neondb",
+      DEV_DATABASE_URLS:
+        "postgresql://user:pass@five.example/neondb, postgresql://user:pass@six.example/neondb",
+    });
+    expect(urls).toHaveLength(6);
+  });
+
+  it("asserts a safe target before any connection can be attempted", () => {
+    expect(() =>
+      assertSafeTestTarget(env({ TEST_DATABASE_URL: undefined })),
+    ).toThrow(/TEST_DATABASE_URL/);
+    expect(() =>
+      assertSafeTestTarget(env({ TEST_DATABASE_URL: DEV_URL })),
+    ).toThrow(/development database/);
   });
 });
