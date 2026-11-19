@@ -33,6 +33,10 @@ for (const [network, prefix] of [
 for (const [network, prefix] of [
   ["::", 128],
   ["::1", 128],
+  // IPv4-compatible (deprecated) and IPv4-translated representations embed
+  // an IPv4 address in an otherwise reserved IPv6 prefix.
+  ["::", 96],
+  ["::ffff:0:0:0", 96],
   ["100::", 64],
   ["fc00::", 7],
   ["fe80::", 10],

@@ -98,6 +98,13 @@ function NoticeMessage({
       </Notice>
     );
   }
+  if (notice === "deactivated_unchanged") {
+    return (
+      <Notice tone="info">
+        That account was already deactivated. No changes were made.
+      </Notice>
+    );
+  }
   if (notice === "reactivated") {
     return (
       <Notice tone="success">
@@ -224,7 +231,8 @@ export default async function UsersPage({
                   </form>
                 ) : null}
 
-                {user.id !== admin.id ? (
+                {user.id !== admin.id &&
+                user.accountStatus !== "deactivated" ? (
                   <form action={deactivateUserAction}>
                     <input type="hidden" name="userId" value={user.id} />
                     <button

@@ -6,6 +6,10 @@ import { ConflictError } from "@/lib/errors";
 import { inviteSchema } from "@/lib/validation/auth";
 import { parseOrThrow } from "@/lib/validation/parse";
 import { writeAuditLog } from "../audit";
+import {
+  lockAdminMembership,
+  requireAdminActorForUpdate,
+} from "./admin-membership";
 import { requireAdminActor } from "./actors";
 import {
   INVITE_TTL_MS,
@@ -26,7 +30,7 @@ export async function createInvite(
   },
 ): Promise<{ token: string; url: string; user: PublicUser }> {
   const now = input.now ?? new Date();
-  const actor = await requireAdminActor(db, input.actorId);
+  await requireAdminActor(db, input.actorId);
   const parsed = parseOrThrow(inviteSchema, {
     email: input.email,
     name: input.name,
@@ -47,43 +51,71 @@ export async function createInvite(
       throw new ConflictError("An account with that email already exists.");
     }
 
-    const [renewed] = await db
-      .update(users)
-      .set({
-        name: parsed.name ?? existing.name,
-        accountStatus: "invited",
-        updatedAt: now,
-      })
-      .where(eq(users.id, existing.id))
-      .returning();
+    return db.transaction(async (tx) => {
+      await lockAdminMembership(tx);
+      const actor = await requireAdminActorForUpdate(tx, input.actorId);
 
-    await invalidateUserTokens(db, existing.id, now);
-    const token = await issueToken(db, {
-      userId: existing.id,
-      purpose: "invite",
-      createdBy: actor.id,
-      expiresAt: addMs(now, INVITE_TTL_MS),
-      now,
+      const [locked] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.id, existing.id))
+        .for("update")
+        .limit(1);
+
+      // Recheck eligibility after acquiring the row lock. A concurrent
+      // deactivation or role change may have landed while we waited.
+      if (!locked) {
+        throw new ConflictError("An account with that email already exists.");
+      }
+      const stillEligible =
+        locked.role === "authorized_user" &&
+        (locked.accountStatus === "invited" ||
+          (locked.accountStatus === "deactivated" && !locked.passwordHash));
+      if (!stillEligible) {
+        throw new ConflictError("An account with that email already exists.");
+      }
+
+      const [renewed] = await tx
+        .update(users)
+        .set({
+          name: parsed.name ?? locked.name,
+          accountStatus: "invited",
+          updatedAt: now,
+        })
+        .where(eq(users.id, locked.id))
+        .returning();
+
+      await invalidateUserTokens(tx, locked.id, now);
+      const token = await issueToken(tx, {
+        userId: locked.id,
+        purpose: "invite",
+        createdBy: actor.id,
+        expiresAt: addMs(now, INVITE_TTL_MS),
+        now,
+      });
+
+      await writeAuditLog(tx, {
+        actor: { id: actor.id, email: actor.email },
+        action: "user_invited",
+        entityType: "user",
+        entityId: locked.id,
+        details: { email: locked.email, renewed: true },
+      });
+
+      return {
+        token,
+        url: activationUrl(token),
+        user: publicUser(renewed ?? locked),
+      };
     });
-
-    await writeAuditLog(db, {
-      actor: { id: actor.id, email: actor.email },
-      action: "user_invited",
-      entityType: "user",
-      entityId: existing.id,
-      details: { email: existing.email, renewed: true },
-    });
-
-    return {
-      token,
-      url: activationUrl(token),
-      user: publicUser(renewed ?? existing),
-    };
   }
 
   const fallbackName = parsed.email.split("@")[0] || "Team member";
 
   const created = await db.transaction(async (tx) => {
+    await lockAdminMembership(tx);
+    const actor = await requireAdminActorForUpdate(tx, input.actorId);
+
     const [user] = await tx
       .insert(users)
       .values({

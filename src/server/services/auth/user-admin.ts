@@ -1,17 +1,15 @@
-import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 
 import type { DbClient, DbTransaction } from "@/db/client";
-import { authTokens, users } from "@/db/schema";
+import { users } from "@/db/schema";
 import { revokeAllUserSessions } from "@/lib/auth/session";
-import {
-  ConflictError,
-  ForbiddenError,
-  NotFoundError,
-  UnauthenticatedError,
-  ValidationError,
-} from "@/lib/errors";
+import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
 import { normalizeUuid } from "@/lib/validation/ids";
 import { writeAuditLog } from "../audit";
+import {
+  lockAdminMembership,
+  requireAdminActorForUpdate,
+} from "./admin-membership";
 import { requireAdminActor } from "./actors";
 import {
   RESET_TTL_MS,
@@ -20,46 +18,20 @@ import {
   publicUser,
   type PublicUser,
 } from "./shared";
-import { invalidateUserTokens, issueToken } from "./token-store";
-
-/**
- * All administrator membership changes share this transaction-level lock.
- * It serializes demotions and deactivations so two concurrent requests can
- * never remove the final active administrator, and avoids row-lock deadlocks
- * when administrators act on each other.
- */
-const ADMIN_MEMBERSHIP_LOCK_KEY = "rdmm.admin-membership";
+import {
+  invalidatePasswordResetTokens,
+  invalidateUserTokens,
+  issueToken,
+} from "./token-store";
 
 export type SetUserRoleResult = {
   user: PublicUser;
   changed: boolean;
 };
 
-async function lockAdminMembership(tx: DbTransaction): Promise<void> {
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${ADMIN_MEMBERSHIP_LOCK_KEY}))`,
-  );
-}
-
-async function requireAdminActorForUpdate(
-  tx: DbTransaction,
-  actorId: string,
-): Promise<typeof users.$inferSelect> {
-  const [actor] = await tx
-    .select()
-    .from(users)
-    .where(eq(users.id, actorId))
-    .for("update")
-    .limit(1);
-
-  if (!actor || actor.accountStatus !== "active") {
-    throw new UnauthenticatedError();
-  }
-  if (actor.role !== "admin") {
-    throw new ForbiddenError();
-  }
-  return actor;
-}
+export type DeactivateUserResult = {
+  changed: boolean;
+};
 
 async function requireAnotherActiveAdministrator(
   tx: DbTransaction,
@@ -84,57 +56,57 @@ export async function createPasswordResetLink(
   input: { actorId: string; userId: string; now?: Date },
 ): Promise<{ token: string; url: string }> {
   const now = input.now ?? new Date();
-  const actor = await requireAdminActor(db, input.actorId);
-
-  const [target] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, input.userId))
-    .limit(1);
-
-  if (!target) {
+  const userId = normalizeUuid(input.userId);
+  if (!userId) {
     throw new NotFoundError("User not found.");
   }
-  if (target.accountStatus !== "active" || !target.passwordHash) {
-    throw new ConflictError(
-      "This account is not active. Send a new invitation instead.",
-    );
-  }
 
-  await db
-    .update(authTokens)
-    .set({ usedAt: now })
-    .where(
-      and(
-        eq(authTokens.userId, target.id),
-        eq(authTokens.purpose, "password_reset"),
-        isNull(authTokens.usedAt),
-      ),
-    );
+  return db.transaction(async (tx) => {
+    await lockAdminMembership(tx);
+    const actor = await requireAdminActorForUpdate(tx, input.actorId);
 
-  const token = await issueToken(db, {
-    userId: target.id,
-    purpose: "password_reset",
-    createdBy: actor.id,
-    expiresAt: addMs(now, RESET_TTL_MS),
-    now,
+    const [target] = await tx
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .for("update")
+      .limit(1);
+
+    if (!target) {
+      throw new NotFoundError("User not found.");
+    }
+    if (target.accountStatus !== "active" || !target.passwordHash) {
+      throw new ConflictError(
+        "This account is not active. Send a new invitation instead.",
+      );
+    }
+
+    await invalidatePasswordResetTokens(tx, target.id, now);
+
+    const token = await issueToken(tx, {
+      userId: target.id,
+      purpose: "password_reset",
+      createdBy: actor.id,
+      expiresAt: addMs(now, RESET_TTL_MS),
+      now,
+    });
+
+    await writeAuditLog(tx, {
+      actor: { id: actor.id, email: actor.email },
+      action: "password_reset_link_created",
+      entityType: "user",
+      entityId: target.id,
+      details: { email: target.email },
+    });
+
+    return { token, url: activationUrl(token) };
   });
-
-  await writeAuditLog(db, {
-    actor: { id: actor.id, email: actor.email },
-    action: "password_reset_link_created",
-    entityType: "user",
-    entityId: target.id,
-    details: { email: target.email },
-  });
-
-  return { token, url: activationUrl(token) };
 }
 
 export async function deactivateUser(
   db: DbClient,
   input: { actorId: string; userId: string; now?: Date },
-): Promise<void> {
+): Promise<DeactivateUserResult> {
   const now = input.now ?? new Date();
   const userId = normalizeUuid(input.userId);
   if (!userId) {
@@ -147,7 +119,7 @@ export async function deactivateUser(
     throw new ConflictError("You cannot deactivate your own account.", "self");
   }
 
-  await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     await lockAdminMembership(tx);
     const currentActor = await requireAdminActorForUpdate(tx, input.actorId);
 
@@ -168,7 +140,7 @@ export async function deactivateUser(
       );
     }
     if (target.accountStatus === "deactivated") {
-      return;
+      return { changed: false };
     }
 
     if (target.accountStatus === "active" && target.role === "admin") {
@@ -198,6 +170,8 @@ export async function deactivateUser(
       entityId: target.id,
       details: { email: target.email },
     });
+
+    return { changed: true };
   });
 }
 
@@ -322,6 +296,10 @@ export async function reactivateUser(
     if (!target.passwordHash) {
       throw new ConflictError("Send a new invitation instead.", "passwordless");
     }
+
+    // Defense in depth: never revive a token that survived deactivation or
+    // was written while the account was inactive.
+    await invalidateUserTokens(tx, target.id, now);
 
     await tx
       .update(users)

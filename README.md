@@ -73,12 +73,27 @@ default.
   `NEON_BRANCH_URL_POOLED`, `NEON_BRANCH_URL_DIRECT`, or `DEV_DATABASE_URLS`
 - a normalized host/database that differs from every comparison URL
 
+Hostnames are compared case-insensitively with trailing dots removed. The
+guard parses the connection string the same way the database driver does, so
+IPv4 shorthand, octal, and hexadecimal forms (`127.1`, `0177.0.0.1`,
+`2130706433`, `0x7f000001`), IDN spellings, and IPv6 spellings compare
+canonically. Database names follow the driver's two-stage percent decoding and
+are compared case-insensitively. Changing only the port does not make an
+otherwise identical target safe. Query parameters that would override the
+target host (`host` or `hostaddr`) are rejected. Recognized Neon `ep-*`
+hostnames are compared by endpoint and region, so a `-pooler` host and its
+direct counterpart are treated as the same endpoint; different endpoint IDs
+remain distinct. A `.neon.tech` hostname that does not contain a recognizable
+endpoint and region fails closed instead of falling back to a string
+comparison.
+
 The guard is implemented once in `src/db/safety.ts`. The verification script,
 Vitest global setup, and each integration test module run it before opening a
 database connection, applying migrations, or truncating tables. A missing,
 invalid, or development-identical target fails the run with a diagnostic and no
 database is modified. Integration tests do not skip silently when the guard
-rejects the target.
+rejects the target. Comparison is syntactic: a custom hostname that resolves to
+the same server is not detected by DNS resolution.
 
 Migrations are additive. The migration script refuses to modify a database that
 contains tables but has no Drizzle migration journal, and it never drops tables
@@ -177,11 +192,13 @@ Administrators manage roles from **Users** (`/dashboard/users`). An active
 authorized user can be promoted to administrator, and an administrator can have
 that access removed after a confirmation prompt. You cannot change your own
 role, and the last active administrator cannot be demoted or deactivated. Role
-changes and deactivations share a transaction-level advisory lock so concurrent
-requests cannot remove the final active administrator. Every role change is
-audited as `user_role_changed` with the previous and new role. Roles are read
-from the database on each request, so changes apply immediately without signing
-the user out.
+changes, deactivations, password-reset link issuance, and invitation creation
+or renewal share a transaction-level advisory lock, and each rechecks the
+acting administrator under that lock. Concurrent requests therefore cannot
+remove the final active administrator or act on stale administrator access.
+Every role change is audited as `user_role_changed` with the previous and new
+role. Roles are read from the database on each request, so changes apply
+immediately without signing the user out.
 
 ### Sole-administrator recovery
 
@@ -201,13 +218,18 @@ database URL through the normal environment or `.env.local`. It validates every
 value before connecting, reports the database target only as a masked host and
 name, and never prints credentials or `AUTH_SECRET`. The pool is always closed.
 
-`APP_URL` must be an `https:` URL with a public hostname. Localhost, loopback,
-private, link-local, and reserved addresses are rejected, including IPv4 and
-IPv6 alternate forms and trailing-dot hostnames. For local development only,
-set `NODE_ENV=development` and `RECOVER_ADMIN_ALLOW_DEV_URL=1` to allow a local
-`http:` URL. The opt-in is rejected when `NODE_ENV` is missing, production, or
-unexpected, so an ambiguous environment fails closed. Hostname checks are
-syntactic and do not perform DNS resolution, so keep `APP_URL` under operator
+`APP_URL` must be an `https:` URL with a public-looking hostname. The validator
+enforces a reserved-address policy: localhost, loopback, private, link-local,
+multicast, documentation, IPv4-compatible (`::/96`), IPv4-translated
+(`::ffff:0:0:0/96`), and prohibited IPv4-mapped IPv6 forms are rejected,
+including alternate textual forms and trailing-dot hostnames. This is a
+conservative syntactic policy, not a claim that every accepted address is
+universally routable or that it eliminates every SSRF risk. For local
+development only, set `NODE_ENV=development` and
+`RECOVER_ADMIN_ALLOW_DEV_URL=1` to allow a local `http:` URL. The opt-in is
+rejected when `NODE_ENV` is missing, production, or unexpected, so an ambiguous
+environment fails closed. Hostname checks do not perform DNS resolution, so an
+accepted hostname can still resolve elsewhere; keep `APP_URL` under operator
 control and point it at the real public deployment.
 
 > **The recovery token is printed to standard output.** It is not written to

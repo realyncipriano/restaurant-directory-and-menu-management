@@ -75,6 +75,23 @@ export async function invalidateUserTokens(
     .where(and(eq(authTokens.userId, userId), isNull(authTokens.usedAt)));
 }
 
+export async function invalidatePasswordResetTokens(
+  db: DbExecutor,
+  userId: string,
+  now: Date,
+): Promise<void> {
+  await db
+    .update(authTokens)
+    .set({ usedAt: now })
+    .where(
+      and(
+        eq(authTokens.userId, userId),
+        eq(authTokens.purpose, "password_reset"),
+        isNull(authTokens.usedAt),
+      ),
+    );
+}
+
 export async function issueToken(
   db: DbExecutor,
   input: {

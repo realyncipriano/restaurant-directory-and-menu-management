@@ -1,13 +1,18 @@
 import { Pool } from "@neondatabase/serverless";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { DbClient } from "@/db/client";
 import { assertSafeTestTarget } from "@/db/safety";
-import { ConflictError, ForbiddenError } from "@/lib/errors";
+import {
+  ConflictError,
+  ForbiddenError,
+  UnauthenticatedError,
+} from "@/lib/errors";
 import {
   auditLogs,
+  authTokens,
   menuCategories,
   menuImportItems,
   menuImports,
@@ -15,7 +20,14 @@ import {
   menus,
   users,
 } from "@/db/schema";
-import { deactivateUser, setUserRole } from "@/server/services/auth";
+import {
+  createInvite,
+  createPasswordResetLink,
+  deactivateUser,
+  reactivateUser,
+  setUserRole,
+} from "@/server/services/auth";
+import { issueToken } from "@/server/services/auth/token-store";
 import {
   acceptAllImportItems,
   applyMenuImport,
@@ -50,6 +62,26 @@ async function waitForAdvisoryLockWaiters(
   }
   throw new Error(
     `Timed out waiting for ${expected} advisory lock waiter(s).`,
+  );
+}
+
+async function waitForUngrantedLockWaiters(
+  pool: Pool,
+  expected: number,
+  timeoutMs = 5_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await pool.query<{ total: string }>(
+      "select count(distinct pid)::text as total from pg_locks where not granted",
+    );
+    if (Number(result.rows[0]?.total ?? 0) >= expected) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(
+    `Timed out waiting for ${expected} blocked lock waiter(s).`,
   );
 }
 
@@ -89,6 +121,22 @@ describe("database concurrency (dedicated test database)", () => {
       RESTART IDENTITY CASCADE
     `);
   });
+
+  async function activeTokensFor(
+    userId: string,
+    purpose: "invite" | "password_reset",
+  ) {
+    return db
+      .select()
+      .from(authTokens)
+      .where(
+        and(
+          eq(authTokens.userId, userId),
+          eq(authTokens.purpose, purpose),
+          isNull(authTokens.usedAt),
+        ),
+      );
+  }
 
   it("never leaves zero active administrators", async () => {
     const first = await seedUser(db, {
@@ -351,7 +399,7 @@ describe("database concurrency (dedicated test database)", () => {
       role: "authorized_user",
     });
 
-    // Must match ADMIN_MEMBERSHIP_LOCK_KEY in src/server/services/auth/user-admin.ts.
+    // Must match ADMIN_MEMBERSHIP_LOCK_KEY in src/server/services/auth/admin-membership.ts.
     const lockPool = new Pool({
       connectionString: integrationTarget.connectionString,
       max: 1,
@@ -426,6 +474,570 @@ describe("database concurrency (dedicated test database)", () => {
         previousRole: "admin",
         newRole: "authorized_user",
       });
+    } finally {
+      await lockClient.query("rollback").catch(() => undefined);
+      lockClient.release();
+      await Promise.allSettled(pending);
+      await lockPool.end();
+    }
+  }, 20_000);
+
+  it("rechecks actor authorization inside both invitation transactions", async () => {
+    const staleActor = await seedUser(db, {
+      email: "invite-stale-admin@example.com",
+      role: "admin",
+    });
+    const existingInvite = await seedUser(db, {
+      email: "existing-invite@example.com",
+      status: "invited",
+    });
+
+    const lockPool = new Pool({
+      connectionString: integrationTarget.connectionString,
+      max: 1,
+    });
+    const lockClient = await lockPool.connect();
+    const pending: Promise<unknown>[] = [];
+    try {
+      await lockClient.query("begin");
+      await lockClient.query("select pg_advisory_xact_lock(hashtext($1))", [
+        "rdmm.admin-membership",
+      ]);
+
+      // Both invitation paths pass their initial actor check while the test
+      // transaction holds the shared lock.
+      const renewal = createInvite(db, {
+        actorId: staleActor.id,
+        email: existingInvite.email,
+      });
+      pending.push(renewal);
+      await waitForAdvisoryLockWaiters(pool, 1);
+
+      const creation = createInvite(db, {
+        actorId: staleActor.id,
+        email: "new-invite@example.com",
+      });
+      pending.push(creation);
+      await waitForAdvisoryLockWaiters(pool, 2);
+
+      // Simulate a demotion committing while both invitations wait. The
+      // in-transaction recheck must reject both instead of issuing tokens.
+      await lockClient.query(
+        "update users set role = 'authorized_user' where id = $1",
+        [staleActor.id],
+      );
+      await lockClient.query("commit");
+
+      const [renewalResult, creationResult] = await Promise.allSettled([
+        renewal,
+        creation,
+      ]);
+      expect(renewalResult.status).toBe("rejected");
+      if (renewalResult.status === "rejected") {
+        expect(renewalResult.reason).toBeInstanceOf(ForbiddenError);
+      }
+      expect(creationResult.status).toBe("rejected");
+      if (creationResult.status === "rejected") {
+        expect(creationResult.reason).toBeInstanceOf(ForbiddenError);
+      }
+
+      const [staleRow] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, staleActor.id));
+      expect(staleRow?.role).toBe("authorized_user");
+
+      const [existingRow] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, existingInvite.id));
+      expect(existingRow?.accountStatus).toBe("invited");
+
+      const created = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, "new-invite@example.com"));
+      expect(created).toHaveLength(0);
+
+      expect(await db.select().from(authTokens)).toHaveLength(0);
+      expect(
+        await db
+          .select()
+          .from(auditLogs)
+          .where(eq(auditLogs.action, "user_invited")),
+      ).toHaveLength(0);
+    } finally {
+      await lockClient.query("rollback").catch(() => undefined);
+      lockClient.release();
+      await Promise.allSettled(pending);
+      await lockPool.end();
+    }
+  }, 20_000);
+
+  it("leaves exactly one active reset token after concurrent issuance", async () => {
+    const admin = await seedUser(db, {
+      email: "reset-issuer@example.com",
+      role: "admin",
+    });
+    const target = await seedUser(db, {
+      email: "reset-target@example.com",
+    });
+
+    const lockPool = new Pool({
+      connectionString: integrationTarget.connectionString,
+      max: 1,
+    });
+    const lockClient = await lockPool.connect();
+    const pending: Promise<unknown>[] = [];
+    try {
+      await lockClient.query("begin");
+      await lockClient.query("select pg_advisory_xact_lock(hashtext($1))", [
+        "rdmm.admin-membership",
+      ]);
+
+      const first = createPasswordResetLink(db, {
+        actorId: admin.id,
+        userId: target.id,
+      });
+      pending.push(first);
+      await waitForAdvisoryLockWaiters(pool, 1);
+
+      const second = createPasswordResetLink(db, {
+        actorId: admin.id,
+        userId: target.id,
+      });
+      pending.push(second);
+      await waitForAdvisoryLockWaiters(pool, 2);
+
+      await lockClient.query("commit");
+
+      const results = await Promise.allSettled([first, second]);
+      expect(
+        results.every((result) => result.status === "fulfilled"),
+      ).toBe(true);
+
+      const active = await activeTokensFor(target.id, "password_reset");
+      expect(active).toHaveLength(1);
+
+      const all = await db
+        .select()
+        .from(authTokens)
+        .where(
+          and(
+            eq(authTokens.userId, target.id),
+            eq(authTokens.purpose, "password_reset"),
+          ),
+        );
+      expect(all).toHaveLength(2);
+
+      const audits = await db
+        .select()
+        .from(auditLogs)
+        .where(eq(auditLogs.action, "password_reset_link_created"));
+      expect(audits).toHaveLength(2);
+    } finally {
+      await lockClient.query("rollback").catch(() => undefined);
+      lockClient.release();
+      await Promise.allSettled(pending);
+      await lockPool.end();
+    }
+  }, 20_000);
+
+  it("rejects reset issuance when the actor is demoted while waiting", async () => {
+    const demotingAdmin = await seedUser(db, {
+      email: "reset-demoting-admin@example.com",
+      role: "admin",
+    });
+    const staleActor = await seedUser(db, {
+      email: "reset-stale-admin@example.com",
+      role: "admin",
+    });
+    const target = await seedUser(db, {
+      email: "reset-demotion-target@example.com",
+    });
+
+    const lockPool = new Pool({
+      connectionString: integrationTarget.connectionString,
+      max: 1,
+    });
+    const lockClient = await lockPool.connect();
+    const pending: Promise<unknown>[] = [];
+    try {
+      await lockClient.query("begin");
+      await lockClient.query("select pg_advisory_xact_lock(hashtext($1))", [
+        "rdmm.admin-membership",
+      ]);
+
+      const demotion = setUserRole(db, {
+        actorId: demotingAdmin.id,
+        userId: staleActor.id,
+        role: "authorized_user",
+      });
+      pending.push(demotion);
+      await waitForAdvisoryLockWaiters(pool, 1);
+
+      const reset = createPasswordResetLink(db, {
+        actorId: staleActor.id,
+        userId: target.id,
+      });
+      pending.push(reset);
+      await waitForAdvisoryLockWaiters(pool, 2);
+
+      await lockClient.query("commit");
+
+      const [demotionResult, resetResult] = await Promise.allSettled([
+        demotion,
+        reset,
+      ]);
+      expect(demotionResult.status).toBe("fulfilled");
+      if (demotionResult.status === "fulfilled") {
+        expect(demotionResult.value.changed).toBe(true);
+      }
+      expect(resetResult.status).toBe("rejected");
+      if (resetResult.status === "rejected") {
+        expect(resetResult.reason).toBeInstanceOf(ForbiddenError);
+      }
+
+      expect(await activeTokensFor(target.id, "password_reset")).toHaveLength(
+        0,
+      );
+      const audits = await db.select().from(auditLogs);
+      expect(
+        audits.filter((audit) => audit.action === "user_role_changed"),
+      ).toHaveLength(1);
+      expect(
+        audits.filter(
+          (audit) => audit.action === "password_reset_link_created",
+        ),
+      ).toHaveLength(0);
+    } finally {
+      await lockClient.query("rollback").catch(() => undefined);
+      lockClient.release();
+      await Promise.allSettled(pending);
+      await lockPool.end();
+    }
+  }, 20_000);
+
+  it("rejects reset issuance when the actor is deactivated while waiting", async () => {
+    const deactivatingAdmin = await seedUser(db, {
+      email: "reset-deactivating-admin@example.com",
+      role: "admin",
+    });
+    const staleActor = await seedUser(db, {
+      email: "reset-stale-deactivated-admin@example.com",
+      role: "admin",
+    });
+    const target = await seedUser(db, {
+      email: "reset-deactivation-target@example.com",
+    });
+
+    const lockPool = new Pool({
+      connectionString: integrationTarget.connectionString,
+      max: 1,
+    });
+    const lockClient = await lockPool.connect();
+    const pending: Promise<unknown>[] = [];
+    try {
+      await lockClient.query("begin");
+      await lockClient.query("select pg_advisory_xact_lock(hashtext($1))", [
+        "rdmm.admin-membership",
+      ]);
+
+      const deactivation = deactivateUser(db, {
+        actorId: deactivatingAdmin.id,
+        userId: staleActor.id,
+      });
+      pending.push(deactivation);
+      await waitForAdvisoryLockWaiters(pool, 1);
+
+      const reset = createPasswordResetLink(db, {
+        actorId: staleActor.id,
+        userId: target.id,
+      });
+      pending.push(reset);
+      await waitForAdvisoryLockWaiters(pool, 2);
+
+      await lockClient.query("commit");
+
+      const [deactivationResult, resetResult] = await Promise.allSettled([
+        deactivation,
+        reset,
+      ]);
+      expect(deactivationResult.status).toBe("fulfilled");
+      if (deactivationResult.status === "fulfilled") {
+        expect(deactivationResult.value.changed).toBe(true);
+      }
+      expect(resetResult.status).toBe("rejected");
+      if (resetResult.status === "rejected") {
+        expect(resetResult.reason).toBeInstanceOf(UnauthenticatedError);
+      }
+
+      expect(await activeTokensFor(target.id, "password_reset")).toHaveLength(
+        0,
+      );
+      const audits = await db.select().from(auditLogs);
+      expect(
+        audits.filter((audit) => audit.action === "user_deactivated"),
+      ).toHaveLength(1);
+      expect(
+        audits.filter(
+          (audit) => audit.action === "password_reset_link_created",
+        ),
+      ).toHaveLength(0);
+    } finally {
+      await lockClient.query("rollback").catch(() => undefined);
+      lockClient.release();
+      await Promise.allSettled(pending);
+      await lockPool.end();
+    }
+  }, 20_000);
+
+  it("invalidates a reset token issued immediately before target deactivation", async () => {
+    const admin = await seedUser(db, {
+      email: "reset-before-deactivation-admin@example.com",
+      role: "admin",
+    });
+    const target = await seedUser(db, {
+      email: "reset-before-deactivation-target@example.com",
+    });
+
+    const lockPool = new Pool({
+      connectionString: integrationTarget.connectionString,
+      max: 1,
+    });
+    const lockClient = await lockPool.connect();
+    const pending: Promise<unknown>[] = [];
+    try {
+      await lockClient.query("begin");
+      await lockClient.query("select pg_advisory_xact_lock(hashtext($1))", [
+        "rdmm.admin-membership",
+      ]);
+
+      const reset = createPasswordResetLink(db, {
+        actorId: admin.id,
+        userId: target.id,
+      });
+      pending.push(reset);
+      await waitForAdvisoryLockWaiters(pool, 1);
+
+      const deactivation = deactivateUser(db, {
+        actorId: admin.id,
+        userId: target.id,
+      });
+      pending.push(deactivation);
+      await waitForAdvisoryLockWaiters(pool, 2);
+
+      await lockClient.query("commit");
+
+      const [resetResult, deactivationResult] = await Promise.allSettled([
+        reset,
+        deactivation,
+      ]);
+      expect(resetResult.status).toBe("fulfilled");
+      expect(deactivationResult.status).toBe("fulfilled");
+      if (deactivationResult.status === "fulfilled") {
+        expect(deactivationResult.value.changed).toBe(true);
+      }
+
+      expect(await activeTokensFor(target.id, "password_reset")).toHaveLength(
+        0,
+      );
+      const tokenRows = await db
+        .select()
+        .from(authTokens)
+        .where(eq(authTokens.userId, target.id));
+      expect(tokenRows).toHaveLength(1);
+      expect(tokenRows[0]?.usedAt).not.toBeNull();
+
+      const audits = await db.select().from(auditLogs);
+      expect(
+        audits.filter(
+          (audit) => audit.action === "password_reset_link_created",
+        ),
+      ).toHaveLength(1);
+      expect(
+        audits.filter((audit) => audit.action === "user_deactivated"),
+      ).toHaveLength(1);
+    } finally {
+      await lockClient.query("rollback").catch(() => undefined);
+      lockClient.release();
+      await Promise.allSettled(pending);
+      await lockPool.end();
+    }
+  }, 20_000);
+
+  it("rejects reset issuance when target deactivation wins the lock", async () => {
+    const admin = await seedUser(db, {
+      email: "deactivation-wins-admin@example.com",
+      role: "admin",
+    });
+    const target = await seedUser(db, {
+      email: "deactivation-wins-target@example.com",
+    });
+
+    const lockPool = new Pool({
+      connectionString: integrationTarget.connectionString,
+      max: 1,
+    });
+    const lockClient = await lockPool.connect();
+    const pending: Promise<unknown>[] = [];
+    try {
+      await lockClient.query("begin");
+      await lockClient.query("select pg_advisory_xact_lock(hashtext($1))", [
+        "rdmm.admin-membership",
+      ]);
+
+      const deactivation = deactivateUser(db, {
+        actorId: admin.id,
+        userId: target.id,
+      });
+      pending.push(deactivation);
+      await waitForAdvisoryLockWaiters(pool, 1);
+
+      const reset = createPasswordResetLink(db, {
+        actorId: admin.id,
+        userId: target.id,
+      });
+      pending.push(reset);
+      await waitForAdvisoryLockWaiters(pool, 2);
+
+      await lockClient.query("commit");
+
+      const [deactivationResult, resetResult] = await Promise.allSettled([
+        deactivation,
+        reset,
+      ]);
+      expect(deactivationResult.status).toBe("fulfilled");
+      if (deactivationResult.status === "fulfilled") {
+        expect(deactivationResult.value.changed).toBe(true);
+      }
+      expect(resetResult.status).toBe("rejected");
+      if (resetResult.status === "rejected") {
+        expect(resetResult.reason).toBeInstanceOf(ConflictError);
+      }
+
+      expect(await activeTokensFor(target.id, "password_reset")).toHaveLength(
+        0,
+      );
+      const audits = await db.select().from(auditLogs);
+      expect(
+        audits.filter((audit) => audit.action === "user_deactivated"),
+      ).toHaveLength(1);
+      expect(
+        audits.filter(
+          (audit) => audit.action === "password_reset_link_created",
+        ),
+      ).toHaveLength(0);
+    } finally {
+      await lockClient.query("rollback").catch(() => undefined);
+      lockClient.release();
+      await Promise.allSettled(pending);
+      await lockPool.end();
+    }
+  }, 20_000);
+
+  it("does not revive reset tokens across deactivation and reactivation", async () => {
+    const admin = await seedUser(db, {
+      email: "reactivation-token-admin@example.com",
+      role: "admin",
+    });
+    const member = await seedUser(db, {
+      email: "reactivation-token-member@example.com",
+    });
+
+    const first = await createPasswordResetLink(db, {
+      actorId: admin.id,
+      userId: member.id,
+    });
+    expect(first.token).toBeTruthy();
+
+    const deactivated = await deactivateUser(db, {
+      actorId: admin.id,
+      userId: member.id,
+    });
+    expect(deactivated.changed).toBe(true);
+
+    const now = new Date();
+    await issueToken(db, {
+      userId: member.id,
+      purpose: "password_reset",
+      createdBy: admin.id,
+      expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+      now,
+    });
+    expect(await activeTokensFor(member.id, "password_reset")).toHaveLength(1);
+
+    await reactivateUser(db, {
+      actorId: admin.id,
+      userId: member.id,
+    });
+
+    expect(await activeTokensFor(member.id, "password_reset")).toHaveLength(0);
+    const rows = await db
+      .select()
+      .from(authTokens)
+      .where(
+        and(
+          eq(authTokens.userId, member.id),
+          eq(authTokens.purpose, "password_reset"),
+        ),
+      );
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => row.usedAt !== null)).toBe(true);
+  }, 20_000);
+
+  // The pre-fix autocommit renewal flow left two active invite tokens under
+  // this overlap; the transaction and user-row lock now serialize renewals.
+  it("serializes concurrent invitation renewals to one active token", async () => {
+    const admin = await seedUser(db, {
+      email: "invite-renewal-admin@example.com",
+      role: "admin",
+    });
+    const invite = await createInvite(db, {
+      actorId: admin.id,
+      email: "invite-renewal-target@example.com",
+    });
+    const [tokenRow] = await db
+      .select()
+      .from(authTokens)
+      .where(eq(authTokens.userId, invite.user.id));
+
+    const lockPool = new Pool({
+      connectionString: integrationTarget.connectionString,
+      max: 1,
+    });
+    const lockClient = await lockPool.connect();
+    const pending: Promise<unknown>[] = [];
+    try {
+      await lockClient.query("begin");
+      await lockClient.query(
+        "select id from auth_tokens where id = $1 for update",
+        [tokenRow!.id],
+      );
+
+      const first = createInvite(db, {
+        actorId: admin.id,
+        email: "invite-renewal-target@example.com",
+      });
+      pending.push(first);
+      await waitForUngrantedLockWaiters(pool, 1);
+
+      const second = createInvite(db, {
+        actorId: admin.id,
+        email: "invite-renewal-target@example.com",
+      });
+      pending.push(second);
+      await waitForUngrantedLockWaiters(pool, 2);
+
+      await lockClient.query("commit");
+
+      const results = await Promise.allSettled([first, second]);
+      expect(
+        results.every((result) => result.status === "fulfilled"),
+      ).toBe(true);
+
+      const active = await activeTokensFor(invite.user.id, "invite");
+      expect(active).toHaveLength(1);
     } finally {
       await lockClient.query("rollback").catch(() => undefined);
       lockClient.release();
