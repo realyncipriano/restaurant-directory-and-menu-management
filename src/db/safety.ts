@@ -7,6 +7,8 @@ export type TestTargetEvaluation =
   | { safe: true; target: DbTarget; connectionString: string }
   | { safe: false; reason: string };
 
+export type SafeTestTarget = Extract<TestTargetEvaluation, { safe: true }>;
+
 export function parseConnectionTarget(connectionString: string): DbTarget {
   const url = new URL(connectionString);
   const database = url.pathname.replace(/^\//, "").split("?")[0] ?? "";
@@ -35,9 +37,13 @@ export function collectDevUrls(
     ...(env.DEV_DATABASE_URLS ?? "").split(","),
   ];
 
-  return values
-    .map((value) => value?.trim())
-    .filter((value): value is string => Boolean(value));
+  return [
+    ...new Set(
+      values
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
 }
 
 export function evaluateTestTarget(
@@ -84,7 +90,11 @@ export function evaluateTestTarget(
     try {
       devTarget = parseConnectionTarget(devUrl);
     } catch {
-      continue;
+      return {
+        safe: false,
+        reason:
+          "A configured development database URL is invalid. Refusing to run destructive tests.",
+      };
     }
     if (
       devTarget.host === target.host &&
@@ -100,12 +110,18 @@ export function evaluateTestTarget(
   return { safe: true, target, connectionString: testUrl };
 }
 
-export function assertDestructiveTestTarget(
+export function assertSafeTestTarget(
   env: Record<string, string | undefined>,
-): string {
+): SafeTestTarget {
   const result = evaluateTestTarget(env);
   if (!result.safe) {
     throw new Error(`Refusing destructive database operation: ${result.reason}`);
   }
-  return result.connectionString;
+  return result;
+}
+
+export function assertDestructiveTestTarget(
+  env: Record<string, string | undefined>,
+): string {
+  return assertSafeTestTarget(env).connectionString;
 }

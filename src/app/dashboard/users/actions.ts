@@ -9,13 +9,20 @@ import {
   formString,
   type InviteFormState,
 } from "@/lib/action-state";
+import {
+  deactivateErrorCode,
+  reactivateErrorCode,
+  roleErrorCode,
+} from "@/lib/admin-user-notices";
 import { getActionAdminId } from "@/lib/auth/action-user";
-import { ConflictError } from "@/lib/errors";
+import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
+import { normalizeUuid } from "@/lib/validation/ids";
 import {
   createInvite,
   createPasswordResetLink,
   deactivateUser,
   reactivateUser,
+  setUserRole,
 } from "@/server/services/auth";
 
 export async function createInviteAction(
@@ -67,20 +74,72 @@ export async function createResetLinkAction(
   }
 }
 
+function normalizedUserId(formData: FormData): string {
+  const userId = normalizeUuid(formString(formData, "userId"));
+  if (!userId) {
+    redirect("/dashboard/users?error=user_invalid");
+  }
+  return userId;
+}
+
+export async function setUserRoleAction(
+  formData: FormData,
+): Promise<void> {
+  const adminId = await getActionAdminId();
+  if (!adminId) redirect("/dashboard");
+
+  const userId = normalizedUserId(formData);
+  const role = formString(formData, "role");
+  let changed = true;
+
+  try {
+    const result = await setUserRole(getDb(), {
+      actorId: adminId,
+      userId,
+      role,
+    });
+    changed = result.changed;
+  } catch (error) {
+    if (error instanceof ConflictError) {
+      redirect(`/dashboard/users?error=${roleErrorCode(error.reason)}`);
+    }
+    if (error instanceof ValidationError) {
+      redirect("/dashboard/users?error=role_invalid");
+    }
+    if (error instanceof NotFoundError) {
+      redirect("/dashboard/users?error=user_missing");
+    }
+    redirect("/dashboard/users?error=failed");
+  }
+
+  revalidatePath("/dashboard/users");
+  if (!changed) {
+    redirect("/dashboard/users?notice=role_unchanged");
+  }
+  redirect(
+    `/dashboard/users?notice=${role === "admin" ? "promoted" : "demoted"}`,
+  );
+}
+
 export async function deactivateUserAction(
   formData: FormData,
 ): Promise<void> {
   const adminId = await getActionAdminId();
   if (!adminId) redirect("/dashboard");
 
+  const userId = normalizedUserId(formData);
+
   try {
     await deactivateUser(getDb(), {
       actorId: adminId,
-      userId: formString(formData, "userId"),
+      userId,
     });
   } catch (error) {
     if (error instanceof ConflictError) {
-      redirect("/dashboard/users?error=conflict");
+      redirect(`/dashboard/users?error=${deactivateErrorCode(error.reason)}`);
+    }
+    if (error instanceof NotFoundError) {
+      redirect("/dashboard/users?error=user_missing");
     }
     redirect("/dashboard/users?error=failed");
   }
@@ -95,12 +154,20 @@ export async function reactivateUserAction(
   const adminId = await getActionAdminId();
   if (!adminId) redirect("/dashboard");
 
+  const userId = normalizedUserId(formData);
+
   try {
     await reactivateUser(getDb(), {
       actorId: adminId,
-      userId: formString(formData, "userId"),
+      userId,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof ConflictError) {
+      redirect(`/dashboard/users?error=${reactivateErrorCode(error.reason)}`);
+    }
+    if (error instanceof NotFoundError) {
+      redirect("/dashboard/users?error=user_missing");
+    }
     redirect("/dashboard/users?error=failed");
   }
 

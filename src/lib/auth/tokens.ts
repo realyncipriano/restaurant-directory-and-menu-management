@@ -1,19 +1,18 @@
 import "server-only";
 
-import { createHmac, randomBytes } from "node:crypto";
-
 import { getAuthSecret } from "@/lib/env";
+import {
+  generateSecureToken,
+  hashIdentifierWithSecret,
+  hashTokenWithSecret,
+} from "./token-crypto";
 
-export function generateSecureToken(): string {
-  return randomBytes(32).toString("base64url");
-}
+export { generateSecureToken };
 
 export function hashToken(token: string): string {
-  return createHmac("sha256", getAuthSecret()).update(token).digest("hex");
+  return hashTokenWithSecret(getAuthSecret(), token);
 }
 
 export function hashIdentifier(value: string): string {
-  return createHmac("sha256", getAuthSecret())
-    .update(`id:${value}`)
-    .digest("hex");
+  return hashIdentifierWithSecret(getAuthSecret(), value);
 }

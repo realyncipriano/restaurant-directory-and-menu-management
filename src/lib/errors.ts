@@ -42,7 +42,10 @@ export class ValidationError extends AppError {
 }
 
 export class ConflictError extends AppError {
-  constructor(message = "That change conflicts with the current state.") {
+  constructor(
+    message = "That change conflicts with the current state.",
+    readonly reason?: string,
+  ) {
     super("conflict", message, 409);
     this.name = "ConflictError";
   }

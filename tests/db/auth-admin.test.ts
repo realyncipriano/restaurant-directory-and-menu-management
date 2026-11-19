@@ -400,15 +400,10 @@ describe("authentication administration services (ephemeral PGlite)", () => {
     expect(audits[0]?.entityId).toBe(invite.user.id);
   });
 
-  it("preserves exact self, last-admin, missing-target, and authorization errors", async () => {
+  it("preserves exact self, missing-target, and authorization errors", async () => {
     const admin = await seedUser(db, {
       email: "admin@example.com",
       role: "admin",
-    });
-    const invitedAdmin = await seedUser(db, {
-      email: "invited-admin@example.com",
-      role: "admin",
-      status: "invited",
     });
     const member = await seedUser(db, { email: "member@example.com" });
     const victim = await seedUser(db, { email: "victim@example.com" });
@@ -422,17 +417,7 @@ describe("authentication administration services (ephemeral PGlite)", () => {
     ).rejects.toMatchObject({
       name: "ConflictError",
       message: "You cannot deactivate your own account.",
-    });
-
-    await expect(
-      deactivateUser(db, {
-        actorId: admin.id,
-        userId: invitedAdmin.id,
-        now: NOW,
-      }),
-    ).rejects.toMatchObject({
-      name: "ConflictError",
-      message: "At least one active administrator is required.",
+      reason: "self",
     });
 
     await expect(
@@ -469,6 +454,115 @@ describe("authentication administration services (ephemeral PGlite)", () => {
     });
 
     expect(await db.select().from(auditLogs)).toHaveLength(0);
+  });
+
+  it("deactivates invited, inactive, and ordinary users without last-admin protection", async () => {
+    const admin = await seedUser(db, {
+      email: "admin@example.com",
+      role: "admin",
+    });
+    const invitedAdmin = await seedUser(db, {
+      email: "invited-admin@example.com",
+      role: "admin",
+      status: "invited",
+    });
+    const inactiveAdmin = await seedUser(db, {
+      email: "inactive-admin@example.com",
+      role: "admin",
+      status: "deactivated",
+    });
+    const member = await seedUser(db, { email: "member@example.com" });
+
+    await deactivateUser(db, {
+      actorId: admin.id,
+      userId: invitedAdmin.id,
+      now: NOW,
+    });
+    await deactivateUser(db, {
+      actorId: admin.id,
+      userId: inactiveAdmin.id,
+      now: NOW,
+    });
+    await deactivateUser(db, {
+      actorId: admin.id,
+      userId: member.id,
+      now: NOW,
+    });
+
+    const rows = await db.select().from(users);
+    expect(
+      rows.find((row) => row.id === invitedAdmin.id)?.accountStatus,
+    ).toBe("deactivated");
+    expect(
+      rows.find((row) => row.id === inactiveAdmin.id)?.accountStatus,
+    ).toBe("deactivated");
+    expect(rows.find((row) => row.id === member.id)?.accountStatus).toBe(
+      "deactivated",
+    );
+    expect(rows.find((row) => row.id === admin.id)?.accountStatus).toBe(
+      "active",
+    );
+    expect(
+      rows.filter(
+        (row) => row.role === "admin" && row.accountStatus === "active",
+      ),
+    ).toHaveLength(1);
+
+    const audits = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, "user_deactivated"));
+    expect(audits.map((audit) => audit.entityId).sort()).toEqual(
+      [invitedAdmin.id, member.id].sort(),
+    );
+  });
+
+  it("protects the final active administrator from self-deactivation", async () => {
+    const survivor = await seedUser(db, {
+      email: "survivor@example.com",
+      role: "admin",
+    });
+    const target = await seedUser(db, {
+      email: "target-admin@example.com",
+      role: "admin",
+    });
+
+    await deactivateUser(db, {
+      actorId: survivor.id,
+      userId: target.id,
+      now: NOW,
+    });
+
+    const rows = await db.select().from(users);
+    expect(
+      rows.filter(
+        (row) => row.role === "admin" && row.accountStatus === "active",
+      ).map((row) => row.id),
+    ).toEqual([survivor.id]);
+
+    for (const userId of [
+      survivor.id,
+      survivor.id.toUpperCase(),
+      survivor.id.replaceAll("-", ""),
+    ]) {
+      await expect(
+        deactivateUser(db, {
+          actorId: survivor.id,
+          userId,
+          now: NOW,
+        }),
+      ).rejects.toMatchObject({
+        name: "ConflictError",
+        message: "You cannot deactivate your own account.",
+        reason: "self",
+      });
+    }
+
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, survivor.id));
+    expect(row?.accountStatus).toBe("active");
   });
 
   it("rejects ineligible reactivation with exact errors", async () => {
@@ -553,7 +647,7 @@ describe("authentication administration services (ephemeral PGlite)", () => {
     });
     await reactivateUser(db, {
       actorId: admin.id,
-      userId: member.id,
+      userId: member.id.replaceAll("-", ""),
       now: NOW,
     });
 

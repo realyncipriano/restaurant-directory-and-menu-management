@@ -62,18 +62,23 @@ content is created only through the management console.
 
 ## Database safety
 
-Destructive tests never target the development database by default.
+Destructive tests fail closed. They never target the development database by
+default.
 
 `npm run test:integration` requires all of:
 
 - `TEST_DATABASE_URL` pointing to a dedicated disposable database or Neon branch
 - `ALLOW_DESTRUCTIVE_DB_TESTS=1`
-- a normalized host/database that differs from `DATABASE_URL`,
-  `DATABASE_URL_DIRECT`, and the `NEON_BRANCH_URL_*` values
+- at least one comparison URL from `DATABASE_URL`, `DATABASE_URL_DIRECT`,
+  `NEON_BRANCH_URL_POOLED`, `NEON_BRANCH_URL_DIRECT`, or `DEV_DATABASE_URLS`
+- a normalized host/database that differs from every comparison URL
 
-The guard is implemented in `src/db/safety.ts` and checked both by the
-verification script and at runtime inside tests. Without it, integration tests
-skip and no database is modified.
+The guard is implemented once in `src/db/safety.ts`. The verification script,
+Vitest global setup, and each integration test module run it before opening a
+database connection, applying migrations, or truncating tables. A missing,
+invalid, or development-identical target fails the run with a diagnostic and no
+database is modified. Integration tests do not skip silently when the guard
+rejects the target.
 
 Migrations are additive. The migration script refuses to modify a database that
 contains tables but has no Drizzle migration journal, and it never drops tables
@@ -83,13 +88,29 @@ database.
 
 ## Testing
 
+The suites use three separate Vitest configurations:
+
+| Command | Configuration | Scope |
+| --- | --- | --- |
+| `npm test` / `npm run test:watch` | `vitest.unit.config.mts` | Unit tests in `tests/unit`; no database or external services. |
+| `npm run test:db` | `vitest.db.config.mts` | Migrations and constraints in `tests/db` using an in-process PGlite database. Does not use `.env.local` or require Neon credentials. |
+| `npm run test:integration` | `vitest.config.mts` | Guarded Neon integration tests in `tests/integration`; fails before connecting unless the target is a verified disposable database, then may migrate it. |
+
+`vitest.config.mts` is also the default Vitest configuration, so a bare
+`npx vitest` runs the guarded integration suite rather than the unit or PGlite
+suites. Direct Vitest invocations use the same fail-closed global setup and
+cannot bypass the test-database safety check. Use the npm scripts above.
+
+Run linting, type checking, unit tests, PGlite tests, and a production build in
+one step:
+
 ```bash
-npm run lint
-npm run typecheck
-npm test          # unit tests
-npm run test:db   # migrations + constraints on ephemeral PGlite
-npm run test:integration  # only with a verified disposable test database
+npm run verify
 ```
+
+`verify` does not run the Neon integration suite or require an external test
+database. Run `npm run test:integration` separately, and only after configuring
+the safeguards in [Database safety](#database-safety).
 
 ## Optional integrations
 
@@ -149,6 +170,64 @@ limit, upload smaller images.
   users, and does not log the password.
 - Administrators invite authorized users with single-use, expiring activation
   links.
+
+### Promotion and demotion
+
+Administrators manage roles from **Users** (`/dashboard/users`). An active
+authorized user can be promoted to administrator, and an administrator can have
+that access removed after a confirmation prompt. You cannot change your own
+role, and the last active administrator cannot be demoted or deactivated. Role
+changes and deactivations share a transaction-level advisory lock so concurrent
+requests cannot remove the final active administrator. Every role change is
+audited as `user_role_changed` with the previous and new role. Roles are read
+from the database on each request, so changes apply immediately without signing
+the user out.
+
+### Sole-administrator recovery
+
+`db:seed:admin` is bootstrap-only: it refuses to run when an administrator
+already exists. If an existing administrator is locked out, issue a one-hour,
+single-use password-reset link from a trusted machine with direct database
+access:
+
+```bash
+RECOVER_ADMIN_EMAIL="admin@example.com" \
+RECOVER_ADMIN_CONFIRM=1 \
+npm run db:recover:admin
+```
+
+The command requires `AUTH_SECRET` (32+ characters), `APP_URL`, and a direct
+database URL through the normal environment or `.env.local`. It validates every
+value before connecting, reports the database target only as a masked host and
+name, and never prints credentials or `AUTH_SECRET`. The pool is always closed.
+
+`APP_URL` must be an `https:` URL with a public hostname. Localhost, loopback,
+private, link-local, and reserved addresses are rejected, including IPv4 and
+IPv6 alternate forms and trailing-dot hostnames. For local development only,
+set `NODE_ENV=development` and `RECOVER_ADMIN_ALLOW_DEV_URL=1` to allow a local
+`http:` URL. The opt-in is rejected when `NODE_ENV` is missing, production, or
+unexpected, so an ambiguous environment fails closed. Hostname checks are
+syntactic and do not perform DNS resolution, so keep `APP_URL` under operator
+control and point it at the real public deployment.
+
+> **The recovery token is printed to standard output.** It is not written to
+> the application log or audit details, but the CLI output contains the token
+> itself. Terminal scrollback, shell recording, CI job logs, `tee`, and copied
+> text can retain it. Clear or secure those records after delivering the link.
+
+The recovery link is stored only as a hash, expires after one hour, can be used
+once, and is recorded in the audit log as `admin_recovery_link_created` with the
+source `cli`. Resetting the password revokes all of that administrator's
+existing sessions. The command refuses non-administrators, invited or
+deactivated accounts, and accounts without a password; it never promotes or
+reactivates anyone. There is no unauthenticated recovery route and no email
+delivery, so deliver the printed link over a secure channel and do not paste it
+into shared logs.
+
+The recovery command has the same trust boundary as the seed and migration
+commands: anyone with direct database credentials can already modify users.
+The audit entry is a record of the operation, not a defense against someone who
+controls the database.
 
 ## Audit history and settings
 
