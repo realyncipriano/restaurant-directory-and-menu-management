@@ -57,6 +57,29 @@ function outputOf(result: SpawnSyncReturns<string>): string {
   return `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
 }
 
+const DIRECT_DEV_URL =
+  "postgresql://dev-user:dev-secret@dev-guard.invalid/rdmm_guard_dev";
+const DIRECT_NEON_DEV_URL =
+  "postgresql://dev-user:dev-secret@ep-guard-123456.us-east-2.aws.neon.tech/rdmm_guard_dev";
+
+function expectBlockedBeforeConnect(
+  overrides: Record<string, string>,
+  expectedReason: string,
+): void {
+  const result = runDirectIntegrationVitest(overrides);
+
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(1);
+  const output = outputOf(result);
+  expect(output).toContain("Refusing destructive database operation");
+  expect(output).toContain(expectedReason);
+  expect(output).not.toContain("Migrations applied");
+  expect(output).not.toContain("getaddrinfo");
+  expect(output).not.toContain("ECONNREFUSED");
+  expect(output).not.toContain("dev-secret");
+  expect(output).not.toContain("test-secret");
+}
+
 describe("direct Vitest integration guard", () => {
   it("fails before database work when TEST_DATABASE_URL is missing", () => {
     const result = runDirectIntegrationVitest({
@@ -91,5 +114,78 @@ describe("direct Vitest integration guard", () => {
     expect(output).toContain("127.0.0.1/rdmm_guard_dev");
     expect(output).not.toContain("super-secret-password");
     expect(output).not.toContain("ECONNREFUSED");
+  });
+
+  it("fails before connecting for a trailing-dot development hostname", () => {
+    expectBlockedBeforeConnect(
+      {
+        TEST_DATABASE_URL:
+          "postgresql://test-user:test-secret@dev-guard.invalid./rdmm_guard_dev",
+        ALLOW_DESTRUCTIVE_DB_TESTS: "1",
+        DEV_DATABASE_URLS: DIRECT_DEV_URL,
+      },
+      "points at the development database",
+    );
+  });
+
+  it("fails before connecting for a pooled Neon endpoint matching the direct development endpoint", () => {
+    expectBlockedBeforeConnect(
+      {
+        TEST_DATABASE_URL:
+          "postgresql://test-user:test-secret@ep-guard-123456-pooler.us-east-2.aws.neon.tech/rdmm_guard_dev",
+        ALLOW_DESTRUCTIVE_DB_TESTS: "1",
+        DEV_DATABASE_URLS: DIRECT_NEON_DEV_URL,
+      },
+      "points at the development database",
+    );
+  });
+
+  it("fails before connecting for an equivalent percent-encoded database name", () => {
+    expectBlockedBeforeConnect(
+      {
+        TEST_DATABASE_URL:
+          "postgresql://test-user:test-secret@dev-guard.invalid/rdmm_guard%5Fdev",
+        ALLOW_DESTRUCTIVE_DB_TESTS: "1",
+        DEV_DATABASE_URLS: DIRECT_DEV_URL,
+      },
+      "points at the development database",
+    );
+  });
+
+  it("fails before connecting for an IPv4 shorthand alias of the development host", () => {
+    expectBlockedBeforeConnect(
+      {
+        TEST_DATABASE_URL:
+          "postgresql://test-user:test-secret@127.1/rdmm_guard_dev",
+        ALLOW_DESTRUCTIVE_DB_TESTS: "1",
+        DEV_DATABASE_URLS:
+          "postgresql://dev-user:dev-secret@127.0.0.1/rdmm_guard_dev",
+      },
+      "points at the development database",
+    );
+  });
+
+  it("fails before connecting when the query string overrides the host", () => {
+    expectBlockedBeforeConnect(
+      {
+        TEST_DATABASE_URL:
+          "postgresql://test-user:test-secret@test-guard.invalid/rdmm_guard_dev?host=dev-guard.invalid",
+        ALLOW_DESTRUCTIVE_DB_TESTS: "1",
+        DEV_DATABASE_URLS: DIRECT_DEV_URL,
+      },
+      "must not override",
+    );
+  });
+
+  it("fails before connecting for a double-encoded database name matching development", () => {
+    expectBlockedBeforeConnect(
+      {
+        TEST_DATABASE_URL:
+          "postgresql://test-user:test-secret@dev-guard.invalid/rdmm_guard%255Fdev",
+        ALLOW_DESTRUCTIVE_DB_TESTS: "1",
+        DEV_DATABASE_URLS: DIRECT_DEV_URL,
+      },
+      "points at the development database",
+    );
   });
 });

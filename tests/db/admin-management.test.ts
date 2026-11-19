@@ -440,6 +440,96 @@ describe("administrator role management (ephemeral PGlite)", () => {
   });
 });
 
+describe("password reset link issuance (ephemeral PGlite)", () => {
+  it.each([
+    ["canonical", (value: string) => value],
+    ["uppercase", (value: string) => value.toUpperCase()],
+    ["unhyphenated", (value: string) => value.replaceAll("-", "")],
+  ])("normalizes a %s target UUID", async (_label, toInput) => {
+    const admin = await seedUser(db, {
+      email: "admin@example.com",
+      role: "admin",
+    });
+    const target = await seedUser(db, { email: "target@example.com" });
+
+    const link = await createPasswordResetLink(db, {
+      actorId: admin.id,
+      userId: toInput(target.id),
+      now: NOW,
+    });
+
+    const [tokenRow] = await db
+      .select()
+      .from(authTokens)
+      .where(eq(authTokens.userId, target.id));
+    expect(tokenRow?.userId).toBe(target.id);
+    expect(tokenRow?.usedAt).toBeNull();
+    expect(await getActivationContext(db, link.token, NOW)).toMatchObject({
+      kind: "password_reset",
+      email: "target@example.com",
+    });
+
+    const audits = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, "password_reset_link_created"));
+    expect(audits).toHaveLength(1);
+    expect(audits[0]?.entityId).toBe(target.id);
+    expect(audits[0]?.actorId).toBe(admin.id);
+  });
+
+  it("rejects a malformed target UUID without writing tokens or audits", async () => {
+    const admin = await seedUser(db, {
+      email: "admin@example.com",
+      role: "admin",
+    });
+
+    await expect(
+      createPasswordResetLink(db, {
+        actorId: admin.id,
+        userId: "not-a-uuid",
+        now: NOW,
+      }),
+    ).rejects.toMatchObject({
+      name: "NotFoundError",
+      message: "User not found.",
+    });
+
+    expect(await db.select().from(authTokens)).toHaveLength(0);
+    expect(await db.select().from(auditLogs)).toHaveLength(0);
+  });
+
+  it("allows an administrator to issue their own reset link", async () => {
+    const admin = await seedUser(db, {
+      email: "admin@example.com",
+      role: "admin",
+    });
+
+    const link = await createPasswordResetLink(db, {
+      actorId: admin.id,
+      userId: admin.id,
+      now: NOW,
+    });
+
+    const [tokenRow] = await db
+      .select()
+      .from(authTokens)
+      .where(eq(authTokens.userId, admin.id));
+    expect(tokenRow?.purpose).toBe("password_reset");
+    expect(tokenRow?.usedAt).toBeNull();
+    expect(tokenRow?.createdBy).toBe(admin.id);
+    expect(await getActivationContext(db, link.token, NOW)).not.toBeNull();
+
+    const audits = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, "password_reset_link_created"));
+    expect(audits).toHaveLength(1);
+    expect(audits[0]?.actorId).toBe(admin.id);
+    expect(audits[0]?.entityId).toBe(admin.id);
+  });
+});
+
 describe("administrator recovery (ephemeral PGlite)", () => {
   it("issues a hashed one-hour link for an active administrator without exposing the token", async () => {
     const admin = await seedUser(db, {

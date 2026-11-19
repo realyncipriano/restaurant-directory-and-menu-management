@@ -311,11 +311,12 @@ describe("authentication administration services (ephemeral PGlite)", () => {
       now: NOW,
     });
 
-    await deactivateUser(db, {
+    const deactivated = await deactivateUser(db, {
       actorId: admin.id,
       userId: member.id,
       now: NOW,
     });
+    expect(deactivated).toEqual({ changed: true });
 
     expect(await getSessionUserByToken(db, login.session.token, NOW)).toBeNull();
     expect(await getActivationContext(db, reset.token, NOW)).toBeNull();
@@ -349,7 +350,7 @@ describe("authentication administration services (ephemeral PGlite)", () => {
         userId: member.id,
         now: NOW,
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ changed: false });
 
     expect(
       await db

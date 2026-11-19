@@ -60,10 +60,15 @@ export async function createResetLinkAction(
     return { error: "You do not have permission to reset passwords." };
   }
 
+  const userId = normalizeUuid(formString(formData, "userId"));
+  if (!userId) {
+    return { error: "User not found." };
+  }
+
   try {
     const link = await createPasswordResetLink(getDb(), {
       actorId: adminId,
-      userId: formString(formData, "userId"),
+      userId,
     });
     return {
       success: "Reset link created. It expires in one hour.",
@@ -128,12 +133,14 @@ export async function deactivateUserAction(
   if (!adminId) redirect("/dashboard");
 
   const userId = normalizedUserId(formData);
+  let changed = true;
 
   try {
-    await deactivateUser(getDb(), {
+    const result = await deactivateUser(getDb(), {
       actorId: adminId,
       userId,
     });
+    changed = result.changed;
   } catch (error) {
     if (error instanceof ConflictError) {
       redirect(`/dashboard/users?error=${deactivateErrorCode(error.reason)}`);
@@ -145,6 +152,9 @@ export async function deactivateUserAction(
   }
 
   revalidatePath("/dashboard/users");
+  if (!changed) {
+    redirect("/dashboard/users?notice=deactivated_unchanged");
+  }
   redirect("/dashboard/users?notice=deactivated");
 }
 
