@@ -65,6 +65,51 @@ const NOT_FOUND_HTML = `<!doctype html>
   </body>
 </html>`;
 
+const SERVICE_UNAVAILABLE_HTML = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Directory temporarily unavailable</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem;
+        background: #fafafa;
+        color: #18181b;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      main { max-width: 32rem; text-align: center; }
+      .code {
+        margin: 0;
+        font-size: 0.875rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #b45309;
+      }
+      h1 { margin: 0.5rem 0 0; font-size: 1.75rem; }
+      p { margin: 0.75rem 0 0; line-height: 1.6; color: #52525b; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="code">503</p>
+      <h1>Directory temporarily unavailable</h1>
+      <p>We could not load this page right now. Please try again in a moment.</p>
+    </main>
+  </body>
+</html>`;
+
+// A short, explicit retry window: long enough to avoid hammering a recovering
+// database, short enough that a user retry is still useful.
+const RETRY_AFTER_SECONDS = 30;
+
 function isDashboardPath(pathname: string): boolean {
   return (
     pathname === "/dashboard" ||
@@ -93,6 +138,22 @@ function notFoundResponse(method: string): Response {
   });
 }
 
+function serviceUnavailableResponse(method: string): Response {
+  return new Response(
+    method === "HEAD" ? null : SERVICE_UNAVAILABLE_HTML,
+    {
+      status: 503,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Retry-After": String(RETRY_AFTER_SECONDS),
+        "X-Robots-Tag": "noindex",
+        "X-Content-Type-Options": "nosniff",
+      },
+    },
+  );
+}
+
 function logExistenceFailure(
   kind: "restaurant" | "menu",
   error: unknown,
@@ -105,7 +166,7 @@ function logExistenceFailure(
 
   // Deliberately omit the URL, slug, message, stack, and query text.
   console.error(
-    `[proxy] Public ${kind} existence check failed (name=${name}, code=${code}); failing open.`,
+    `[proxy] Public ${kind} existence check failed (name=${name}, code=${code}); returning 503.`,
   );
 }
 
@@ -156,19 +217,25 @@ export async function proxy(request: NextRequest) {
       return notFoundResponse(request.method);
     }
 
+    let exists: boolean;
     try {
-      const exists = await publicMenuExists(
+      exists = await publicMenuExists(
         getDb(),
         restaurantSlug,
         menuSlug,
       );
-      if (!exists) {
-        return notFoundResponse(request.method);
-      }
     } catch (error) {
-      // A transient database failure must not produce a false 404. Fail open
-      // and let the existing page/data layer handle the request.
+      // A database failure must not produce a false 404. Return a retryable
+      // 503 rather than falling through to rendering, which would produce a
+      // 200 error shell. This catch is intentionally scoped to the existence
+      // check; connection failures can surface as generic errors, so treating
+      // any exception here as unavailable is safer than guessing.
       logExistenceFailure("menu", error);
+      return serviceUnavailableResponse(request.method);
+    }
+
+    if (!exists) {
+      return notFoundResponse(request.method);
     }
 
     return NextResponse.next();
@@ -179,14 +246,17 @@ export async function proxy(request: NextRequest) {
     return notFoundResponse(request.method);
   }
 
+  let exists: boolean;
   try {
-    const exists = await publicRestaurantExists(getDb(), restaurantSlug);
-    if (!exists) {
-      return notFoundResponse(request.method);
-    }
+    exists = await publicRestaurantExists(getDb(), restaurantSlug);
   } catch (error) {
-    // See the fail-open note above.
+    // See the menu existence-check note above.
     logExistenceFailure("restaurant", error);
+    return serviceUnavailableResponse(request.method);
+  }
+
+  if (!exists) {
+    return notFoundResponse(request.method);
   }
 
   return NextResponse.next();
