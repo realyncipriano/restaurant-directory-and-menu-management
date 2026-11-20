@@ -16,6 +16,10 @@ import type {
   MenuTreeCategory,
 } from "./menu-tree";
 import { loadMenuTree, loadMenuTreesForRecords } from "./menu-tree";
+import {
+  publicMenuCondition,
+  publicRestaurantCondition,
+} from "./public-visibility";
 
 export type PublicRestaurantCard = {
   restaurant: typeof restaurants.$inferSelect;
@@ -100,12 +104,7 @@ export async function getPublicRestaurant(
   const [restaurant] = await db
     .select()
     .from(restaurants)
-    .where(
-      and(
-        eq(restaurants.slug, slug),
-        eq(restaurants.status, "active"),
-      ),
-    )
+    .where(publicRestaurantCondition(slug))
     .limit(1);
 
   if (!restaurant) return null;
@@ -149,14 +148,7 @@ export async function getPublicMenu(
     .select({ restaurant: restaurants, menu: menus })
     .from(menus)
     .innerJoin(restaurants, eq(menus.restaurantId, restaurants.id))
-    .where(
-      and(
-        eq(restaurants.slug, restaurantSlug),
-        eq(restaurants.status, "active"),
-        eq(menus.slug, menuSlug),
-        eq(menus.status, "published"),
-      ),
-    )
+    .where(publicMenuCondition(restaurantSlug, menuSlug))
     .limit(1);
 
   if (!row) return null;
