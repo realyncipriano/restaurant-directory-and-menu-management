@@ -1,0 +1,529 @@
+{
+  "base": "https://restaurant-directory-and-menu-management-rhey30.vercel.app",
+  "deployment": "https://restaurant-directory-and-menu-management-1alri2hb8-rhey30.vercel.app",
+  "commit": "70dcf2654d2ba1d9df2d699ff9924d190815bdb2",
+  "generatedAt": "2026-11-21T00:48:28.298Z",
+  "summary": {
+    "pass": 37,
+    "fail": 0,
+    "blocked": 1,
+    "total": 38
+  },
+  "checks": [
+    {
+      "id": "existing-restaurant-document",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 133448,
+        "title": "K-Cafe ? Menu Directory",
+        "proxyNotFound": false
+      },
+      "expected": "HTTP 200 HTML document"
+    },
+    {
+      "id": "existing-menu-document",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 27977,
+        "title": "Coffee ? K-Cafe ? Menu Directory",
+        "proxyNotFound": false
+      },
+      "expected": "HTTP 200 HTML document"
+    },
+    {
+      "id": "missing-restaurant-document",
+      "result": "PASS",
+      "observed": {
+        "status": 404,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 1450,
+        "title": "Page not found",
+        "proxyNotFound": true
+      },
+      "expected": "HTTP 404 with proxy no-store/noindex/nosniff body"
+    },
+    {
+      "id": "missing-menu-document",
+      "result": "PASS",
+      "observed": {
+        "status": 404,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 1450,
+        "title": "Page not found",
+        "proxyNotFound": true
+      },
+      "expected": "HTTP 404 with proxy no-store/noindex/nosniff body"
+    },
+    {
+      "id": "invalid-restaurant-uppercase",
+      "result": "PASS",
+      "observed": {
+        "status": 404,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 1450,
+        "title": "Page not found",
+        "proxyNotFound": true
+      },
+      "expected": "HTTP 404 with proxy no-store/noindex/nosniff body"
+    },
+    {
+      "id": "invalid-restaurant-underscore",
+      "result": "PASS",
+      "observed": {
+        "status": 404,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 1450,
+        "title": "Page not found",
+        "proxyNotFound": true
+      },
+      "expected": "HTTP 404 with proxy no-store/noindex/nosniff body"
+    },
+    {
+      "id": "invalid-restaurant-trailing-hyphen",
+      "result": "PASS",
+      "observed": {
+        "status": 404,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 1450,
+        "title": "Page not found",
+        "proxyNotFound": true
+      },
+      "expected": "HTTP 404 with proxy no-store/noindex/nosniff body"
+    },
+    {
+      "id": "invalid-menu-uppercase",
+      "result": "PASS",
+      "observed": {
+        "status": 404,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 1450,
+        "title": "Page not found",
+        "proxyNotFound": true
+      },
+      "expected": "HTTP 404 with proxy no-store/noindex/nosniff body"
+    },
+    {
+      "id": "invalid-menu-underscore",
+      "result": "PASS",
+      "observed": {
+        "status": 404,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 1450,
+        "title": "Page not found",
+        "proxyNotFound": true
+      },
+      "expected": "HTTP 404 with proxy no-store/noindex/nosniff body"
+    },
+    {
+      "id": "missing-restaurant-trailing-slash",
+      "result": "PASS",
+      "observed": {
+        "status": 404,
+        "finalUrl": "https://restaurant-directory-and-menu-management-rhey30.vercel.app/restaurants/prod-smoke-missing-20261121-a1b2c3",
+        "contentType": "text/html; charset=utf-8",
+        "bodyLength": 1450,
+        "title": "Page not found",
+        "proxyNotFound": true
+      },
+      "expected": "Trailing-slash normalization then HTTP 404",
+      "note": "Next returns 308 for the trailing slash, then the 404 page"
+    },
+    {
+      "id": "head-existing-restaurant",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 0,
+        "proxyNotFound": false
+      },
+      "expected": "HTTP 200, empty body"
+    },
+    {
+      "id": "head-existing-menu",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 0,
+        "proxyNotFound": false
+      },
+      "expected": "HTTP 200, empty body"
+    },
+    {
+      "id": "head-missing-restaurant",
+      "result": "PASS",
+      "observed": {
+        "status": 404,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 0,
+        "proxyNotFound": true
+      },
+      "expected": "HTTP 404, empty body, proxy error headers"
+    },
+    {
+      "id": "head-missing-menu",
+      "result": "PASS",
+      "observed": {
+        "status": 404,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 0,
+        "proxyNotFound": true
+      },
+      "expected": "HTTP 404, empty body, proxy error headers"
+    },
+    {
+      "id": "head-invalid-restaurant",
+      "result": "PASS",
+      "observed": {
+        "status": 404,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 0,
+        "proxyNotFound": true
+      },
+      "expected": "HTTP 404, empty body, proxy error headers"
+    },
+    {
+      "id": "head-invalid-menu",
+      "result": "PASS",
+      "observed": {
+        "status": 404,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff",
+        "bodyLength": 0,
+        "proxyNotFound": true
+      },
+      "expected": "HTTP 404, empty body, proxy error headers"
+    },
+    {
+      "id": "login-accessible",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "bodyLength": 22852,
+        "title": "Sign in ? Menu Directory"
+      },
+      "expected": "HTTP 200 sign-in page"
+    },
+    {
+      "id": "login-with-next-accessible",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "bodyLength": 22893,
+        "title": "Sign in ? Menu Directory"
+      },
+      "expected": "HTTP 200 sign-in page with safe next path"
+    },
+    {
+      "id": "dashboard-unauthenticated-redirect",
+      "result": "PASS",
+      "observed": {
+        "status": 307,
+        "location": "/login?next=%2Fdashboard",
+        "contentType": "text/plain"
+      },
+      "expected": "HTTP 307 to /login?next=/dashboard"
+    },
+    {
+      "id": "dashboard-nested-unauthenticated-redirect",
+      "result": "PASS",
+      "observed": {
+        "status": 307,
+        "location": "/login?next=%2Fdashboard%2Frestaurants",
+        "contentType": "text/plain"
+      },
+      "expected": "HTTP 307 to /login with nested next path"
+    },
+    {
+      "id": "dashboard-redirect-followed",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "finalUrl": "https://restaurant-directory-and-menu-management-rhey30.vercel.app/login?next=%2Fdashboard",
+        "title": "Sign in ? Menu Directory",
+        "contentType": "text/html; charset=utf-8"
+      },
+      "expected": "Following the redirect reaches the sign-in page"
+    },
+    {
+      "id": "rsc-existing",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/x-component",
+        "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+        "bodyLength": 78028,
+        "title": "",
+        "proxy404": false
+      },
+      "expected": "HTTP 200 Next.js client-protocol response; proxy must not intercept"
+    },
+    {
+      "id": "rsc-missing",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/x-component",
+        "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+        "bodyLength": 8430,
+        "title": "",
+        "proxy404": false
+      },
+      "expected": "HTTP 200 Next.js client-protocol response; proxy must not intercept",
+      "note": "HTTP 200 is Next's expected RSC/prefetch not-found protocol, not a direct-document 200 shell"
+    },
+    {
+      "id": "next-router-prefetch-existing",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "bodyLength": 133448,
+        "title": "K-Cafe ? Menu Directory",
+        "proxy404": false
+      },
+      "expected": "HTTP 200 Next.js client-protocol response; proxy must not intercept"
+    },
+    {
+      "id": "next-router-prefetch-missing",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "bodyLength": 11942,
+        "title": "Menu Directory",
+        "proxy404": false
+      },
+      "expected": "HTTP 200 Next.js client-protocol response; proxy must not intercept",
+      "note": "HTTP 200 is Next's expected RSC/prefetch not-found protocol, not a direct-document 200 shell"
+    },
+    {
+      "id": "segment-prefetch-existing",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "bodyLength": 133448,
+        "title": "K-Cafe ? Menu Directory",
+        "proxy404": false
+      },
+      "expected": "HTTP 200 Next.js client-protocol response; proxy must not intercept"
+    },
+    {
+      "id": "segment-prefetch-missing",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "bodyLength": 11942,
+        "title": "Menu Directory",
+        "proxy404": false
+      },
+      "expected": "HTTP 200 Next.js client-protocol response; proxy must not intercept",
+      "note": "HTTP 200 is Next's expected RSC/prefetch not-found protocol, not a direct-document 200 shell"
+    },
+    {
+      "id": "purpose-prefetch-existing",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "bodyLength": 133448,
+        "title": "K-Cafe ? Menu Directory",
+        "proxy404": false
+      },
+      "expected": "HTTP 200 Next.js client-protocol response; proxy must not intercept"
+    },
+    {
+      "id": "purpose-prefetch-missing",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "bodyLength": 11942,
+        "title": "Menu Directory",
+        "proxy404": false
+      },
+      "expected": "HTTP 200 Next.js client-protocol response; proxy must not intercept",
+      "note": "HTTP 200 is Next's expected RSC/prefetch not-found protocol, not a direct-document 200 shell"
+    },
+    {
+      "id": "sec-purpose-prefetch-existing",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "bodyLength": 133448,
+        "title": "K-Cafe ? Menu Directory",
+        "proxy404": false
+      },
+      "expected": "HTTP 200 Next.js client-protocol response; proxy must not intercept"
+    },
+    {
+      "id": "sec-purpose-prefetch-missing",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "bodyLength": 11942,
+        "title": "Menu Directory",
+        "proxy404": false
+      },
+      "expected": "HTTP 200 Next.js client-protocol response; proxy must not intercept",
+      "note": "HTTP 200 is Next's expected RSC/prefetch not-found protocol, not a direct-document 200 shell"
+    },
+    {
+      "id": "browser-existing-restaurant",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "finalUrl": "https://restaurant-directory-and-menu-management-rhey30.vercel.app/restaurants/k-cafe",
+        "title": "K-Cafe ? Menu Directory",
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "robots": "noindex",
+        "nosniff": "nosniff"
+      },
+      "expected": "Browser navigation succeeds"
+    },
+    {
+      "id": "browser-existing-menu",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "finalUrl": "https://restaurant-directory-and-menu-management-rhey30.vercel.app/restaurants/k-cafe/menus/coffee",
+        "title": "Coffee ? K-Cafe ? Menu Directory",
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "robots": "noindex",
+        "nosniff": "nosniff"
+      },
+      "expected": "Browser navigation succeeds"
+    },
+    {
+      "id": "browser-missing-restaurant",
+      "result": "PASS",
+      "observed": {
+        "status": 404,
+        "finalUrl": "https://restaurant-directory-and-menu-management-rhey30.vercel.app/restaurants/prod-smoke-missing-20261121-a1b2c3",
+        "title": "Page not found",
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff"
+      },
+      "expected": "Browser navigation returns HTTP 404"
+    },
+    {
+      "id": "browser-missing-menu",
+      "result": "PASS",
+      "observed": {
+        "status": 404,
+        "finalUrl": "https://restaurant-directory-and-menu-management-rhey30.vercel.app/restaurants/k-cafe/menus/prod-smoke-missing-menu-20261121-a1b2c3",
+        "title": "Page not found",
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff"
+      },
+      "expected": "Browser navigation returns HTTP 404"
+    },
+    {
+      "id": "browser-login",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "finalUrl": "https://restaurant-directory-and-menu-management-rhey30.vercel.app/login",
+        "title": "Sign in ? Menu Directory",
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff"
+      },
+      "expected": "Browser navigation succeeds"
+    },
+    {
+      "id": "browser-dashboard-redirect",
+      "result": "PASS",
+      "observed": {
+        "status": 200,
+        "finalUrl": "https://restaurant-directory-and-menu-management-rhey30.vercel.app/login?next=%2Fdashboard",
+        "title": "Sign in ? Menu Directory",
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "no-store",
+        "robots": "noindex",
+        "nosniff": "nosniff"
+      },
+      "expected": "Browser navigation succeeds"
+    },
+    {
+      "id": "database-failure-503",
+      "result": "BLOCKED",
+      "observed": {
+        "attempted": false
+      },
+      "expected": "HTTP 503 with Retry-After and error headers on database failure",
+      "note": "Live outage simulation remains prohibited; covered by tests/unit/proxy.test.ts"
+    }
+  ]
+}
