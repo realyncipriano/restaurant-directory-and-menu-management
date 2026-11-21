@@ -30,8 +30,25 @@ const rawItemSchema = z.object({
 });
 
 const responseSchema = z.object({
+  categories: z.array(z.string()).optional(),
   items: z.array(rawItemSchema),
 });
+
+const UNCATEGORIZED = "Uncategorized";
+
+const PLACEHOLDER_CATEGORY_PATTERN =
+  /^(?:menu|category|section|page|image|photo|scan|item|untitled|unknown|n\/?a)\s*[#(\-]?\s*\d*[)]?(?:\s*(?:of|\/)\s*\d+)?$/i;
+
+function normalizeCategoryName(value: string | null | undefined): string {
+  const cleaned = (value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[\-–—•·:;,.]+|[\-–—•·:;,.]+$/g, "")
+    .trim();
+  if (!cleaned) return UNCATEGORIZED;
+  if (PLACEHOLDER_CATEGORY_PATTERN.test(cleaned)) return UNCATEGORIZED;
+  return cleaned.slice(0, 120);
+}
 
 export type ExtractedVariant = {
   name: string;
@@ -63,23 +80,38 @@ export type ExtractionResult = {
 
 const PROMPT = `Extract every menu item visible in these menu page images.
 
-Return a JSON object with an "items" array. Each item must use this shape:
+A single image often contains several category sections, for example "Coffee",
+"Non-coffee", and "Rice Meals". Detect every visible section heading in every
+image, not just the first one. Each item belongs to the nearest heading above
+it. A heading carries over to the items below it, including onto the next image
+when the section continues.
+
+Return a JSON object with this shape:
 {
-  "page": 1,
-  "category": "Category heading",
-  "name": "Item name",
-  "description": null,
-  "price": "185.00",
-  "variants": [{"name": "Regular", "price": "185.00"}],
-  "modifiers": [{"name": "Extra rice", "price": "25.00", "isAvailable": true}],
-  "availability": "available",
-  "confidence": 0
+  "categories": ["Coffee", "Non-coffee"],
+  "items": [
+    {
+      "page": 1,
+      "category": "Coffee",
+      "name": "Item name",
+      "description": null,
+      "price": "185.00",
+      "variants": [{"name": "Regular", "price": "185.00"}],
+      "modifiers": [{"name": "Extra rice", "price": "25.00", "isAvailable": true}],
+      "availability": "available",
+      "confidence": 0
+    }
+  ]
 }
 
 Rules:
+- List every distinct section heading in reading order in "categories".
+- Set "category" to exactly one of the names in "categories".
+- If an item has no visible section heading, use "Uncategorized".
+- Never use "Menu", "Menu 1", "Page 1", "Category 1", an image filename, or a page number as a category.
+- "page" is the 1-based index of the image the item appears in. It is not a category.
 - Prices are in Philippine pesos as decimal strings (for example "185.00").
 - Use null when a price is not readable. Never invent prices.
-- Use the visible category heading. If there is none, use "Menu".
 - Put size or serving options in variants, each with its own price.
 - Put optional extras in modifiers. Their price is the additional amount.
 - Set availability to "unavailable" only when the menu marks it unavailable.
@@ -162,7 +194,7 @@ export async function extractMenuItems(
               { type: "text", text: PROMPT },
               ...images.map((image) => ({
                 type: "image_url",
-                image_url: { url: image.dataUrl },
+                image_url: { url: image.dataUrl, detail: "high" as const },
               })),
             ],
           },
@@ -181,19 +213,34 @@ export async function extractMenuItems(
       parseJsonContent(extractContent(payload)),
     );
 
+    const canonicalCategories = new Map<string, string>();
+    for (const value of parsed.categories ?? []) {
+      const categoryName = normalizeCategoryName(value);
+      const key = categoryName.toLowerCase();
+      if (!canonicalCategories.has(key)) {
+        canonicalCategories.set(key, categoryName);
+      }
+    }
+
     const items: ExtractedMenuItem[] = [];
     for (const raw of parsed.items) {
       const name = raw.name.trim();
       if (!name) continue;
-      const categoryName =
-        (raw.category ?? raw.categoryName ?? "Menu").trim() || "Menu";
+      const rawCategory = normalizeCategoryName(
+        raw.category?.trim() ? raw.category : raw.categoryName,
+      );
+      const categoryKey = rawCategory.toLowerCase();
+      const categoryName = canonicalCategories.get(categoryKey) ?? rawCategory;
+      if (!canonicalCategories.has(categoryKey)) {
+        canonicalCategories.set(categoryKey, categoryName);
+      }
 
       items.push({
         pageNumber:
           typeof raw.page === "number" && Number.isFinite(raw.page)
             ? Math.max(1, Math.floor(raw.page))
             : null,
-        categoryName: categoryName.slice(0, 120),
+        categoryName,
         name: name.slice(0, 160),
         description: raw.description?.trim() || null,
         basePriceMinor: parseNumberPrice(raw.price),

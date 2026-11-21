@@ -81,7 +81,7 @@ describe("menu extraction", () => {
       isAvailable: true,
     });
     expect(result.items[1]).toMatchObject({
-      categoryName: "Menu",
+      categoryName: "Uncategorized",
       basePriceMinor: null,
       availabilityStatus: "unavailable",
       confidence: 20,
@@ -102,6 +102,94 @@ describe("menu extraction", () => {
     expect(JSON.stringify(body.messages)).toContain(
       "data:image/png;base64,AAAA",
     );
+  });
+
+  it("keeps every detected category and canonicalizes case-insensitive names", async () => {
+    const fetchMock = vi.fn(async () =>
+      providerResponse(
+        JSON.stringify({
+          categories: ["Coffee", "Non-coffee", "Espresso Specials"],
+          items: [
+            { category: "coffee", name: "Latte", price: "120.00" },
+            { category: "NON-COFFEE", name: "Matcha", price: "130.00" },
+            {
+              category: "Espresso Specials",
+              name: "Americano",
+              price: "100.00",
+            },
+          ],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await extractMenuItems(config, [
+      { dataUrl: "data:image/png;base64,AAAA" },
+    ]);
+
+    expect(result.items.map((item) => item.categoryName)).toEqual([
+      "Coffee",
+      "Non-coffee",
+      "Espresso Specials",
+    ]);
+  });
+
+  it("maps generic placeholder categories to Uncategorized", async () => {
+    const fetchMock = vi.fn(async () =>
+      providerResponse(
+        JSON.stringify({
+          categories: ["Menu 1"],
+          items: [
+            { category: "Menu 1", name: "Latte", price: "120.00" },
+            { category: "Page 2", name: "Matcha", price: "130.00" },
+            { category: "  ", name: "Americano", price: "100.00" },
+            { category: "Menu", name: "Mocha", price: "140.00" },
+          ],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await extractMenuItems(config, [
+      { dataUrl: "data:image/png;base64,AAAA" },
+    ]);
+
+    expect(result.items.map((item) => item.categoryName)).toEqual([
+      "Uncategorized",
+      "Uncategorized",
+      "Uncategorized",
+      "Uncategorized",
+    ]);
+  });
+
+  it("instructs the model to detect multiple category sections", async () => {
+    const fetchMock = vi.fn(
+      async (url: string, init?: RequestInit) => {
+        void url;
+        void init;
+        return providerResponse(
+          JSON.stringify({ categories: [], items: [] }),
+        );
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await extractMenuItems(config, [
+      { dataUrl: "data:image/png;base64,AAAA" },
+    ]);
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse(String(init?.body));
+    const userContent = body.messages[1].content;
+
+    expect(userContent[0].text).toContain(
+      "A single image often contains several category sections",
+    );
+    expect(userContent[0].text).toContain('Never use "Menu"');
+    expect(userContent[1]).toMatchObject({
+      type: "image_url",
+      image_url: { detail: "high" },
+    });
   });
 
   it("rejects provider error responses", async () => {

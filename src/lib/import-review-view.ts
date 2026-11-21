@@ -66,6 +66,7 @@ export type ImportReviewView = {
   visibleCount: number;
   visibleReviewCount: number;
   pendingOutsideCategory: number;
+  uncategorizedCount: number;
   stats: ImportReviewStat[];
   keepOnlyMessage: string;
 };
@@ -203,9 +204,12 @@ export function buildImportReviewView(
     else summary.rejected += 1;
     categoryMap.set(key, summary);
   }
-  const categories = [...categoryMap.values()].sort((left, right) =>
-    left.name.localeCompare(right.name),
-  );
+  const categories = [...categoryMap.values()];
+  const uncategorizedCount = items.filter(
+    (item) =>
+      item.decision !== "reject" &&
+      normalizeCategory(categoryLabel(item.categoryName)) === "uncategorized",
+  ).length;
   const activeCategory = selectedCategoryParam
     ? (categories.find(
         (category) =>
@@ -310,6 +314,7 @@ export function buildImportReviewView(
     visibleCount,
     visibleReviewCount,
     pendingOutsideCategory,
+    uncategorizedCount,
     stats,
     keepOnlyMessage,
   };

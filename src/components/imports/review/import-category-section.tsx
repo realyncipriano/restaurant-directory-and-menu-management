@@ -18,6 +18,7 @@ export function ImportCategorySection({
   categories,
   activeCategory,
   pendingOutsideCategory,
+  uncategorizedCount,
   keepOnlyMessage,
   canEdit,
   status,
@@ -29,6 +30,7 @@ export function ImportCategorySection({
   categories: readonly CategorySummary[];
   activeCategory: CategorySummary | null;
   pendingOutsideCategory: number;
+  uncategorizedCount: number;
   keepOnlyMessage: string;
   canEdit: boolean;
   status: string;
@@ -50,7 +52,8 @@ export function ImportCategorySection({
             Every section heading is extracted first. The menu title names the
             overall container, such as “Beverages”, while headings detected in
             the scan become categories such as “Coffee”, “Non-coffee”, and
-            “Espresso Specials”. Choose a category to review only that section.
+            “Espresso Specials”. One image can contain several categories.
+            Choose a category to review only that section.
           </p>
         </div>
         <p className="text-xs text-zinc-500">
@@ -59,6 +62,14 @@ export function ImportCategorySection({
           }`}
         </p>
       </div>
+
+      {uncategorizedCount > 0 ? (
+        <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs leading-5 text-amber-900">
+          {uncategorizedCount} item{uncategorizedCount === 1 ? "" : "s"} have
+          no detected section heading and are grouped under “Uncategorized”.
+          Edit their Category field below before applying, or apply them as-is.
+        </p>
+      ) : null}
 
       <nav
         aria-label="Filter scan by category"

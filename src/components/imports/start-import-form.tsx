@@ -189,7 +189,7 @@ export function StartImportForm({
       <Field
         id="import-menu"
         label="Apply scan to draft menu"
-        note="All section headings are extracted as categories in this menu. Scans always land in a draft first; during review you can accept, reject, or keep only one category."
+        note="One image can contain several categories. Every visible section heading is extracted as a category in this menu. Scans always land in a draft first; during review you can accept, reject, or keep only one category."
         noteLayout="below"
         required
       >

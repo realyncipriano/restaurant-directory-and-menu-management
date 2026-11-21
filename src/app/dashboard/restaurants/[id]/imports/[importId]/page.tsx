@@ -145,6 +145,7 @@ export default async function MenuImportReviewPage({
         categories={view.categories}
         activeCategory={view.activeCategory}
         pendingOutsideCategory={view.pendingOutsideCategory}
+        uncategorizedCount={view.uncategorizedCount}
         keepOnlyMessage={view.keepOnlyMessage}
         canEdit={canEdit}
         status={record.status}

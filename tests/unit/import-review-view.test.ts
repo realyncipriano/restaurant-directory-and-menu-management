@@ -71,7 +71,7 @@ describe("import review view", () => {
     ]);
   });
 
-  it("normalizes, labels, sorts, and counts categories", () => {
+  it("normalizes, labels, groups, and counts categories", () => {
     const view = buildImportReviewView([
       item({ id: "coffee-1", categoryName: "Coffee" }),
       item({ id: "coffee-2", categoryName: " coffee " }),
@@ -89,7 +89,7 @@ describe("import review view", () => {
     expect(view.selectedCategoryMissing).toBe(false);
   });
 
-  it("sorts category labels independently of input order", () => {
+  it("keeps categories in first-appearance order", () => {
     const view = buildImportReviewView([
       item({ id: "zebra", categoryName: "Zebra" }),
       item({ id: "alpha", categoryName: "Alpha" }),
@@ -97,10 +97,25 @@ describe("import review view", () => {
     ]);
 
     expect(view.categories.map((category) => category.name)).toEqual([
+      "Zebra",
       "Alpha",
       "Middle",
-      "Zebra",
     ]);
+  });
+
+  it("counts items grouped under Uncategorized", () => {
+    const view = buildImportReviewView([
+      item({ id: "blank", categoryName: "   " }),
+      item({ id: "case", categoryName: "UNCATEGORIZED" }),
+      item({
+        id: "rejected",
+        categoryName: "Uncategorized",
+        decision: "reject",
+      }),
+      item({ id: "coffee", categoryName: "Coffee" }),
+    ]);
+
+    expect(view.uncategorizedCount).toBe(2);
   });
 
   it("matches selected categories case-insensitively and ignores surrounding whitespace", () => {
