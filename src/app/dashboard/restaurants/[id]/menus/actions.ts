@@ -11,6 +11,7 @@ import { itemInputSchema } from "@/lib/validation/menu";
 import { parseOrThrow } from "@/lib/validation/parse";
 import {
   createMenu,
+  deleteMenu,
   discardDraft,
   publishMenu,
   startEditingMenu,
@@ -130,6 +131,24 @@ export async function discardDraftAction(formData: FormData): Promise<void> {
 
   revalidateMenuPaths(restaurantId, menuId);
   redirect(`/dashboard/restaurants/${restaurantId}/menus?notice=discarded`);
+}
+
+export async function deleteMenuAction(formData: FormData): Promise<void> {
+  const actorId = await getActionUserId();
+  if (!actorId) redirect("/login");
+  const restaurantId = formString(formData, "restaurantId");
+  const menuId = formString(formData, "menuId");
+
+  try {
+    await deleteMenu(getDb(), actorId, menuId);
+  } catch {
+    redirect(
+      `/dashboard/restaurants/${restaurantId}/menus/${menuId}?error=delete-menu`,
+    );
+  }
+
+  revalidateMenuPaths(restaurantId, menuId);
+  redirect(`/dashboard/restaurants/${restaurantId}/menus?notice=deleted`);
 }
 
 export async function publishMenuAction(

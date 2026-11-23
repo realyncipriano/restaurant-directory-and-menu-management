@@ -47,6 +47,10 @@ describe("menu editor messages", () => {
         "import-applied",
         "Accepted scan items were applied to this draft. Review the menu before publishing.",
       ],
+      [
+        "deleted",
+        "Menu deleted. It is hidden from the menus list and public pages.",
+      ],
     ] as const;
 
     for (const [notice, expected] of notices) {
@@ -68,6 +72,10 @@ describe("menu editor messages", () => {
       ["discard", "The draft could not be discarded."],
       ["delete-category", "The category could not be deleted."],
       ["delete-item", "The menu item could not be deleted."],
+      [
+        "delete-menu",
+        "The menu could not be deleted. Check your permissions and try again.",
+      ],
     ] as const;
 
     for (const [error, expected] of errors) {
@@ -101,6 +109,7 @@ describe("menu editor status and permissions", () => {
     expect(menuStatusTone("draft")).toBe("warning");
     expect(menuStatusTone("published")).toBe("success");
     expect(menuStatusTone("archived")).toBe("neutral");
+    expect(menuStatusTone("deleted")).toBe("danger");
     expect(menuStatusTone("unknown")).toBe("neutral");
   });
 
@@ -117,6 +126,8 @@ describe("menu editor status and permissions", () => {
       restaurantActive: true,
       canEdit: true,
       canPublish: true,
+      canDelete: true,
+      canCreateDraft: true,
     });
 
     expect(
@@ -131,6 +142,8 @@ describe("menu editor status and permissions", () => {
       restaurantActive: true,
       canEdit: true,
       canPublish: false,
+      canDelete: true,
+      canCreateDraft: true,
     });
 
     expect(
@@ -145,6 +158,8 @@ describe("menu editor status and permissions", () => {
       restaurantActive: true,
       canEdit: true,
       canPublish: false,
+      canDelete: true,
+      canCreateDraft: true,
     });
 
     expect(
@@ -159,6 +174,8 @@ describe("menu editor status and permissions", () => {
       restaurantActive: false,
       canEdit: false,
       canPublish: false,
+      canDelete: false,
+      canCreateDraft: false,
     });
 
     expect(
@@ -173,7 +190,85 @@ describe("menu editor status and permissions", () => {
       restaurantActive: true,
       canEdit: false,
       canPublish: false,
+      canDelete: false,
+      canCreateDraft: false,
     });
+  });
+
+  it("derives delete and create-draft availability from lineage state", () => {
+    const base = {
+      restaurantStatus: "active",
+      menuStatus: "draft",
+      lineageHasPublished: false,
+    };
+
+    expect(
+      deriveMenuEditorFlags({
+        ...base,
+        canEditMenu: true,
+        canPublishMenu: false,
+      }),
+    ).toMatchObject({ canDelete: true, canCreateDraft: true });
+
+    expect(
+      deriveMenuEditorFlags({
+        ...base,
+        canEditMenu: true,
+        canPublishMenu: false,
+        menuStatus: "published",
+        lineageHasPublished: true,
+      }),
+    ).toMatchObject({ canDelete: false, canCreateDraft: true });
+
+    expect(
+      deriveMenuEditorFlags({
+        ...base,
+        canEditMenu: true,
+        canPublishMenu: true,
+        menuStatus: "published",
+        lineageHasPublished: true,
+      }),
+    ).toMatchObject({ canDelete: true, canCreateDraft: true });
+
+    expect(
+      deriveMenuEditorFlags({
+        ...base,
+        canEditMenu: true,
+        canPublishMenu: false,
+        menuStatus: "archived",
+        lineageHasPublished: true,
+      }),
+    ).toMatchObject({ canDelete: false, canCreateDraft: true });
+
+    expect(
+      deriveMenuEditorFlags({
+        ...base,
+        canEditMenu: true,
+        canPublishMenu: true,
+        menuStatus: "archived",
+        lineageHasPublished: true,
+      }),
+    ).toMatchObject({ canDelete: true, canCreateDraft: true });
+
+    expect(
+      deriveMenuEditorFlags({
+        ...base,
+        canEditMenu: true,
+        canPublishMenu: true,
+        menuStatus: "archived",
+        lineageHasPublished: true,
+        isDeleted: true,
+      }),
+    ).toMatchObject({ canDelete: false, canCreateDraft: false });
+
+    expect(
+      deriveMenuEditorFlags({
+        ...base,
+        canEditMenu: true,
+        canPublishMenu: true,
+        restaurantStatus: "archived",
+      }),
+    ).toMatchObject({ canDelete: false, canCreateDraft: false });
   });
 });
 

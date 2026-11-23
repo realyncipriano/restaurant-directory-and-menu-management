@@ -4,13 +4,15 @@ import { formatMinorForInput } from "@/lib/money";
 
 export { countLabel, itemCountLabel };
 
-export type MenuStatusTone = "warning" | "success" | "neutral";
+export type MenuStatusTone = "warning" | "success" | "neutral" | "danger";
 
 export type MenuEditorFlags = {
   isDraft: boolean;
   restaurantActive: boolean;
   canEdit: boolean;
   canPublish: boolean;
+  canDelete: boolean;
+  canCreateDraft: boolean;
 };
 
 export type MenuEditorMessages = {
@@ -75,6 +77,8 @@ export function menuEditorNoticeMessage(
       return "Menu item deleted from this draft.";
     case "import-applied":
       return "Accepted scan items were applied to this draft. Review the menu before publishing.";
+    case "deleted":
+      return "Menu deleted. It is hidden from the menus list and public pages.";
     default:
       return null;
   }
@@ -92,6 +96,8 @@ export function menuEditorErrorMessage(
       return "The category could not be deleted.";
     case "delete-item":
       return "The menu item could not be deleted.";
+    case "delete-menu":
+      return "The menu could not be deleted. Check your permissions and try again.";
     default:
       return error
         ? "The action could not be completed. Please try again."
@@ -115,6 +121,8 @@ export function menuStatusTone(status: string): MenuStatusTone {
       return "warning";
     case "published":
       return "success";
+    case "deleted":
+      return "danger";
     default:
       return "neutral";
   }
@@ -125,15 +133,26 @@ export function deriveMenuEditorFlags(input: {
   canPublishMenu: boolean;
   restaurantStatus: string;
   menuStatus: string;
+  lineageHasPublished?: boolean;
+  isDeleted?: boolean;
 }): MenuEditorFlags {
   const isDraft = input.menuStatus === "draft";
   const restaurantActive = input.restaurantStatus === "active";
+  const isDeleted = input.isDeleted ?? false;
+  const lineageHasPublished =
+    input.lineageHasPublished ?? input.menuStatus === "published";
+  const canEdit = input.canEditMenu && restaurantActive;
 
   return {
     isDraft,
     restaurantActive,
-    canEdit: input.canEditMenu && restaurantActive,
+    canEdit,
     canPublish: input.canPublishMenu && restaurantActive && isDraft,
+    canDelete:
+      canEdit &&
+      !isDeleted &&
+      (!lineageHasPublished || input.canPublishMenu),
+    canCreateDraft: canEdit && !isDeleted,
   };
 }
 

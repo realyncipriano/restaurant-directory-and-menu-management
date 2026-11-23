@@ -3,9 +3,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { DbClient } from "@/db/client";
 import {
+  auditLogs,
   menuCategories,
   menuChangeLogs,
+  menuItemModifiers,
   menuItems,
+  menuItemVariants,
   menus,
 } from "@/db/schema";
 import {
@@ -16,6 +19,7 @@ import {
 } from "@/lib/errors";
 import {
   createMenu,
+  deleteMenu,
   discardDraft,
   getMenuManagement,
   listMenusForRestaurant,
@@ -31,8 +35,10 @@ import {
 } from "@/server/services/menu-content";
 import {
   createRestaurant,
+  setRestaurantArchived,
   setRestaurantPermission,
 } from "@/server/services/restaurants";
+import { getPublicMenu } from "@/server/services/public-directory";
 import type { ItemInput } from "@/lib/validation/menu";
 import type { EphemeralDb } from "./ephemeral-db";
 import { openTestDb, resetTestDb, seedUser } from "../helpers/db";
@@ -109,6 +115,14 @@ describe("menu services (ephemeral PGlite)", () => {
     );
 
     return { admin, editor, publisher, viewer, restaurant };
+  }
+
+  async function menuDeletedAudits(lineageId: string) {
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, "menu_deleted"));
+    return rows.filter((row) => row.details?.lineageId === lineageId);
   }
 
   it("creates draft menus with generated, unique slugs", async () => {
@@ -459,5 +473,313 @@ describe("menu services (ephemeral PGlite)", () => {
       .from(menuItems)
       .where(eq(menuItems.categoryId, category.id));
     expect(remainingItems).toHaveLength(0);
+  });
+
+  it("soft-deletes a draft-only lineage and preserves its content", async () => {
+    const { admin, editor, restaurant } = await setup();
+    const menu = await createMenu(db, admin.id, restaurant.id, {
+      title: "Draft Delete",
+    });
+    const category = await createCategory(db, admin.id, menu.id, {
+      name: "Mains",
+    });
+    const item = await createMenuItem(
+      db,
+      admin.id,
+      menu.id,
+      itemInput(category.id, {
+        variants: [{ name: "Regular", price: 18500 }],
+        modifiers: [
+          { name: "Extra rice", price: 2500, isAvailable: true },
+        ],
+      }),
+    );
+    await db
+      .update(menuItems)
+      .set({ imageObjectKey: "restaurants/test/items/adobo.jpg" })
+      .where(eq(menuItems.id, item.id));
+
+    const deleted = await deleteMenu(db, editor.id, menu.id);
+    expect(deleted.status).toBe("archived");
+
+    const rows = await db
+      .select()
+      .from(menus)
+      .where(eq(menus.lineageId, menu.lineageId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe("archived");
+
+    const management = await getMenuManagement(db, admin.id, menu.id);
+    expect(management.isDeleted).toBe(true);
+    expect(management.deletion?.entityId).toBe(menu.id);
+
+    const audits = await menuDeletedAudits(menu.lineageId);
+    expect(audits).toHaveLength(1);
+    expect(audits[0]?.details).toMatchObject({
+      lineageId: menu.lineageId,
+      restaurantId: restaurant.id,
+      hadPublished: false,
+      versions: 1,
+    });
+
+    expect(
+      await listMenusForRestaurant(db, admin.id, restaurant.id),
+    ).toHaveLength(0);
+    await expect(
+      startEditingMenu(db, editor.id, menu.id),
+    ).rejects.toBeInstanceOf(ConflictError);
+
+    const categories = await db
+      .select()
+      .from(menuCategories)
+      .where(eq(menuCategories.menuId, menu.id));
+    expect(categories).toHaveLength(1);
+
+    const items = await db
+      .select()
+      .from(menuItems)
+      .where(eq(menuItems.categoryId, category.id));
+    expect(items.map((row) => row.id)).toContain(item.id);
+    expect(items[0]?.imageObjectKey).toBe(
+      "restaurants/test/items/adobo.jpg",
+    );
+
+    const priorAudits = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.entityId, menu.id));
+    expect(priorAudits.some((row) => row.action === "menu_created")).toBe(
+      true,
+    );
+
+    const variants = await db
+      .select()
+      .from(menuItemVariants)
+      .where(eq(menuItemVariants.menuItemId, item.id));
+    expect(variants).toHaveLength(1);
+
+    const modifiers = await db
+      .select()
+      .from(menuItemModifiers)
+      .where(eq(menuItemModifiers.menuItemId, item.id));
+    expect(modifiers).toHaveLength(1);
+  });
+
+  it("does not label discarded draft-only lineages as deleted", async () => {
+    const { admin, restaurant } = await setup();
+    const menu = await createMenu(db, admin.id, restaurant.id, {
+      title: "Discarded Draft",
+    });
+
+    await discardDraft(db, admin.id, menu.id);
+
+    const management = await getMenuManagement(db, admin.id, menu.id);
+    expect(management.menu.status).toBe("archived");
+    expect(management.isDeleted).toBe(false);
+    expect(management.deletion).toBeNull();
+    expect(await menuDeletedAudits(menu.lineageId)).toHaveLength(0);
+  });
+
+  it("marks an explicitly deleted discarded lineage as deleted", async () => {
+    const { admin, restaurant } = await setup();
+    const menu = await createMenu(db, admin.id, restaurant.id, {
+      title: "Explicitly Deleted",
+    });
+
+    await discardDraft(db, admin.id, menu.id);
+    expect(
+      (await getMenuManagement(db, admin.id, menu.id)).isDeleted,
+    ).toBe(false);
+
+    await deleteMenu(db, admin.id, menu.id);
+
+    expect(
+      (await getMenuManagement(db, admin.id, menu.id)).isDeleted,
+    ).toBe(true);
+    expect(await menuDeletedAudits(menu.lineageId)).toHaveLength(1);
+  });
+
+  it("requires edit and publish permission to delete a published lineage", async () => {
+    const { admin, editor, publisher, restaurant } = await setup();
+    const menu = await createMenu(db, admin.id, restaurant.id, {
+      title: "Live Menu",
+    });
+    const category = await createCategory(db, admin.id, menu.id, {
+      name: "Mains",
+    });
+    await createMenuItem(db, admin.id, menu.id, itemInput(category.id));
+    await publishMenu(db, admin.id, menu.id);
+    const draft = await startEditingMenu(db, admin.id, menu.id);
+
+    await expect(
+      deleteMenu(db, editor.id, menu.id),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      deleteMenu(db, publisher.id, menu.id),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    const before = await db
+      .select()
+      .from(menus)
+      .where(eq(menus.lineageId, menu.lineageId));
+    expect(before.some((row) => row.status === "published")).toBe(true);
+    expect(before.some((row) => row.status === "draft")).toBe(true);
+    expect(await menuDeletedAudits(menu.lineageId)).toHaveLength(0);
+
+    const changeLogsBefore = await db
+      .select()
+      .from(menuChangeLogs)
+      .where(eq(menuChangeLogs.menuId, menu.id));
+    expect(changeLogsBefore.length).toBeGreaterThan(0);
+
+    await deleteMenu(db, admin.id, draft.id);
+
+    const after = await db
+      .select()
+      .from(menus)
+      .where(eq(menus.lineageId, menu.lineageId));
+    expect(after).toHaveLength(2);
+    expect(after.every((row) => row.status === "archived")).toBe(true);
+
+    const changeLogsAfter = await db
+      .select()
+      .from(menuChangeLogs)
+      .where(eq(menuChangeLogs.menuId, menu.id));
+    expect(changeLogsAfter).toHaveLength(changeLogsBefore.length);
+
+    const audits = await menuDeletedAudits(menu.lineageId);
+    expect(audits).toHaveLength(1);
+    expect(audits[0]?.details).toMatchObject({
+      hadPublished: true,
+      versions: 2,
+    });
+
+    expect(await getPublicMenu(db, restaurant.slug, menu.slug)).toBeNull();
+    expect(
+      await listMenusForRestaurant(db, admin.id, restaurant.id),
+    ).toHaveLength(0);
+  });
+
+  it("deletes a lineage from an archived historical version when permissions allow", async () => {
+    const { admin, editor, restaurant } = await setup();
+    await setRestaurantPermission(
+      db,
+      admin.id,
+      restaurant.id,
+      editor.id,
+      { canEditMenu: true, canPublishMenu: true },
+    );
+
+    const first = await createMenu(db, admin.id, restaurant.id, {
+      title: "Versioned Menu",
+    });
+    const category = await createCategory(db, admin.id, first.id, {
+      name: "Mains",
+    });
+    await createMenuItem(db, admin.id, first.id, itemInput(category.id));
+    await publishMenu(db, admin.id, first.id);
+
+    const draft = await startEditingMenu(db, admin.id, first.id);
+    await publishMenu(db, admin.id, draft.id);
+
+    const before = await db
+      .select()
+      .from(menus)
+      .where(eq(menus.lineageId, first.lineageId));
+    expect(before.find((row) => row.id === first.id)?.status).toBe("archived");
+
+    const deleted = await deleteMenu(db, editor.id, first.id);
+    expect(deleted.id).toBe(first.id);
+    expect(deleted.status).toBe("archived");
+
+    const after = await db
+      .select()
+      .from(menus)
+      .where(eq(menus.lineageId, first.lineageId));
+    expect(after).toHaveLength(2);
+    expect(after.every((row) => row.status === "archived")).toBe(true);
+    expect(await menuDeletedAudits(first.lineageId)).toHaveLength(1);
+  });
+
+  it("writes one deletion audit event across repeated deletes", async () => {
+    const { admin, restaurant } = await setup();
+    const menu = await createMenu(db, admin.id, restaurant.id, {
+      title: "Repeat Delete",
+    });
+
+    await deleteMenu(db, admin.id, menu.id);
+    await deleteMenu(db, admin.id, menu.id);
+
+    const concurrent = await Promise.allSettled([
+      deleteMenu(db, admin.id, menu.id),
+      deleteMenu(db, admin.id, menu.id),
+    ]);
+    expect(
+      concurrent.every((result) => result.status === "fulfilled"),
+    ).toBe(true);
+
+    expect(await menuDeletedAudits(menu.lineageId)).toHaveLength(1);
+  });
+
+  it("rejects deleting a menu when the restaurant is archived", async () => {
+    const { admin, restaurant } = await setup();
+    const menu = await createMenu(db, admin.id, restaurant.id, {
+      title: "Archived Restaurant Menu",
+    });
+
+    await setRestaurantArchived(db, admin.id, restaurant.id, true);
+
+    await expect(
+      deleteMenu(db, admin.id, menu.id),
+    ).rejects.toBeInstanceOf(ConflictError);
+
+    const rows = await db
+      .select()
+      .from(menus)
+      .where(eq(menus.id, menu.id));
+    expect(rows[0]?.status).toBe("draft");
+    expect(await menuDeletedAudits(menu.lineageId)).toHaveLength(0);
+  });
+
+  it("allows a deleted menu slug to be reused", async () => {
+    const { admin, restaurant } = await setup();
+    const menu = await createMenu(db, admin.id, restaurant.id, {
+      title: "Lunch",
+    });
+
+    await deleteMenu(db, admin.id, menu.id);
+
+    const replacement = await createMenu(db, admin.id, restaurant.id, {
+      title: "Lunch",
+    });
+    expect(replacement.slug).toBe("lunch");
+    expect(replacement.lineageId).not.toBe(menu.lineageId);
+  });
+
+  it("serializes concurrent publish and delete without leaving an active lineage", async () => {
+    const { admin, restaurant } = await setup();
+    const menu = await createMenu(db, admin.id, restaurant.id, {
+      title: "Race Menu",
+    });
+    const category = await createCategory(db, admin.id, menu.id, {
+      name: "Mains",
+    });
+    await createMenuItem(db, admin.id, menu.id, itemInput(category.id));
+    await publishMenu(db, admin.id, menu.id);
+    const draft = await startEditingMenu(db, admin.id, menu.id);
+
+    const results = await Promise.allSettled([
+      publishMenu(db, admin.id, draft.id),
+      deleteMenu(db, admin.id, draft.id),
+    ]);
+    expect(results.some((result) => result.status === "fulfilled")).toBe(true);
+
+    const rows = await db
+      .select()
+      .from(menus)
+      .where(eq(menus.lineageId, menu.lineageId));
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    expect(rows.every((row) => row.status === "archived")).toBe(true);
+    expect(await menuDeletedAudits(menu.lineageId)).toHaveLength(1);
   });
 });

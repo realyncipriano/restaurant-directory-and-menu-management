@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 
 import type { DbClient } from "@/db/client";
 import type { DbExecutor } from "@/db/types";
@@ -84,6 +84,35 @@ export async function requireDraftEditable(
   }
 
   return result;
+}
+
+const MENU_LINEAGE_LOCK_PREFIX = "rdmm.menu-lineage:";
+
+/**
+ * Serializes every lifecycle change for a menu lineage. Locking existing menu
+ * rows is not enough because a concurrent create-draft can insert a new version
+ * that was not present when the transaction started.
+ */
+export async function lockMenuLineage(
+  tx: DbExecutor,
+  lineageId: string,
+): Promise<void> {
+  const lockKey = `${MENU_LINEAGE_LOCK_PREFIX}${lineageId}`;
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${lockKey}))`,
+  );
+}
+
+export async function lockMenuLineageRows(
+  tx: DbExecutor,
+  lineageId: string,
+): Promise<MenuRecord[]> {
+  return tx
+    .select()
+    .from(menus)
+    .where(eq(menus.lineageId, lineageId))
+    .orderBy(asc(menus.id))
+    .for("update");
 }
 
 export async function lockMenuRow(

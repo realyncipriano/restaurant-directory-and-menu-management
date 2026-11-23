@@ -6,15 +6,18 @@ import {
   eq,
   inArray,
   ne,
+  sql,
 } from "drizzle-orm";
 
 import type { DbClient } from "@/db/client";
 import {
+  auditLogs,
   menuCategories,
   menuChangeLogs,
   menuItems,
   menus,
 } from "@/db/schema";
+import type { DbExecutor } from "@/db/types";
 import { NotFoundError } from "@/lib/errors";
 import { requireMenuPermission } from "../menu-access";
 import { loadMenuTree, type MenuRecord } from "../menu-tree";
@@ -30,6 +33,41 @@ export type MenuLineageSummary = {
   draftItemCount: number;
   updatedAt: Date;
 };
+
+export type MenuLineageDeletion = {
+  auditLogId: string;
+  entityId: string | null;
+  createdAt: Date;
+};
+
+/**
+ * Deletion is an explicit audit event, not merely the absence of a draft or
+ * published version. A discarded draft-only lineage is fully archived too, so
+ * the `menu_deleted` event (keyed by lineageId) is the source of truth.
+ */
+export async function findMenuLineageDeletion(
+  db: DbExecutor,
+  lineageId: string,
+): Promise<MenuLineageDeletion | null> {
+  const [row] = await db
+    .select({
+      auditLogId: auditLogs.id,
+      entityId: auditLogs.entityId,
+      createdAt: auditLogs.createdAt,
+    })
+    .from(auditLogs)
+    .where(
+      and(
+        eq(auditLogs.entityType, "menu"),
+        eq(auditLogs.action, "menu_deleted"),
+        sql`${auditLogs.details}->>'lineageId' = ${lineageId}`,
+      ),
+    )
+    .orderBy(desc(auditLogs.createdAt))
+    .limit(1);
+
+  return row ?? null;
+}
 
 export async function listMenusForRestaurant(
   db: DbClient,
@@ -135,5 +173,15 @@ export async function getMenuManagement(
     .orderBy(desc(menuChangeLogs.createdAt))
     .limit(50);
 
-  return { menu, access, tree, versions, changes };
+  const deletion = await findMenuLineageDeletion(db, menu.lineageId);
+
+  return {
+    menu,
+    access,
+    tree,
+    versions,
+    changes,
+    deletion,
+    isDeleted: deletion !== null,
+  };
 }

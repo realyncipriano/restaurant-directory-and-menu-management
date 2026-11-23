@@ -1,5 +1,6 @@
 export {
   createMenu,
+  deleteMenu,
   discardDraft,
   updateMenuSettings,
 } from "./menus/lifecycle";

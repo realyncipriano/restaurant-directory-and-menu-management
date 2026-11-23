@@ -74,9 +74,11 @@ export default async function RestaurantMenusPage({
 
       {notice ? (
         <Notice tone="success">
-          {notice === "discarded"
-            ? "Draft discarded. The published menu was left unchanged."
-            : "Change saved."}
+          {notice === "deleted"
+            ? "Menu deleted. It is hidden from the menus list and public pages."
+            : notice === "discarded"
+              ? "Draft discarded. The published menu was left unchanged."
+              : "Change saved."}
         </Notice>
       ) : null}
       {error ? (

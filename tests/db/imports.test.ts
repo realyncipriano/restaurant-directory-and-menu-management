@@ -21,12 +21,17 @@ import type { ItemInput } from "@/lib/validation/menu";
 import {
   acceptAllImportItems,
   applyMenuImport,
+  getMenuImport,
   keepOnlyImportCategory,
   updateImportCategoryDecision,
   updateImportItem,
 } from "@/server/services/imports";
 import { createMenuItem } from "@/server/services/menu-content";
-import { createMenu } from "@/server/services/menus";
+import {
+  createMenu,
+  deleteMenu,
+  getMenuManagement,
+} from "@/server/services/menus";
 import {
   createRestaurant,
   setRestaurantPermission,
@@ -736,5 +741,25 @@ describe("menu import application (ephemeral PGlite)", () => {
     await expect(
       applyMenuImport(db, viewer.id, record.id),
     ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("keeps import history readable after the linked menu is deleted", async () => {
+    const { admin, menu, record } = await setup();
+    await stageItem(record.id, {
+      categoryName: "Mains",
+      name: "Preserved Scan Item",
+      basePriceMinor: 7000,
+    });
+
+    await deleteMenu(db, admin.id, menu.id);
+
+    const data = await getMenuImport(db, admin.id, record.id);
+    expect(data.menu.id).toBe(menu.id);
+    expect(data.menu.status).toBe("archived");
+    expect(data.items).toHaveLength(1);
+    expect(data.items[0]?.name).toBe("Preserved Scan Item");
+
+    const management = await getMenuManagement(db, admin.id, menu.id);
+    expect(management.isDeleted).toBe(true);
   });
 });

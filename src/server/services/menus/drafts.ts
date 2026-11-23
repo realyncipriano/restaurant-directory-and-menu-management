@@ -11,7 +11,11 @@ import {
 } from "@/db/schema";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { writeAuditLog } from "../audit";
-import { lockMenuRow, requireMenuPermission } from "../menu-access";
+import {
+  lockMenuLineage,
+  lockMenuRow,
+  requireMenuPermission,
+} from "../menu-access";
 import { loadMenuTree, type MenuRecord } from "../menu-tree";
 
 export async function startEditingMenu(
@@ -32,12 +36,11 @@ export async function startEditingMenu(
     );
   }
 
-  if (menu.status === "draft") return menu;
-
   const now = new Date();
 
   try {
     return await db.transaction(async (tx) => {
+      await lockMenuLineage(tx, menu.lineageId);
       const lockedSource = await lockMenuRow(tx, menu.id);
 
       const [existingDraft] = await tx

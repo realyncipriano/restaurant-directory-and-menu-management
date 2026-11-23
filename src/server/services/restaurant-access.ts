@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
-import type { DbClient } from "@/db/client";
 import { restaurantUserPermissions, restaurants } from "@/db/schema";
+import type { DbExecutor } from "@/db/types";
 import {
   ALL_PERMISSIONS,
   hasRestaurantPermission,
@@ -25,7 +25,7 @@ export type RestaurantAccess = {
 };
 
 export async function getRestaurantAccess(
-  db: DbClient,
+  db: DbExecutor,
   actorId: string,
   restaurantId: string,
 ): Promise<RestaurantAccess> {
@@ -87,7 +87,7 @@ export async function getRestaurantAccess(
 }
 
 export async function requireRestaurantPermission(
-  db: DbClient,
+  db: DbExecutor,
   actorId: string,
   restaurantId: string,
   permission: RestaurantPermission,

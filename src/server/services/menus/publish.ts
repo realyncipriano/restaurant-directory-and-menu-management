@@ -10,7 +10,11 @@ import {
 } from "@/lib/errors";
 import { writeAuditLog } from "../audit";
 import { diffMenuTrees, type MenuChangeAction } from "../menu-diff";
-import { lockDraftMenu, requireMenuPermission } from "../menu-access";
+import {
+  lockDraftMenu,
+  lockMenuLineage,
+  requireMenuPermission,
+} from "../menu-access";
 import { loadMenuTree, type MenuRecord } from "../menu-tree";
 
 async function writeChange(
@@ -64,6 +68,7 @@ export async function publishMenu(
   const now = new Date();
 
   return db.transaction(async (tx) => {
+    await lockMenuLineage(tx, menu.lineageId);
     const current = await lockDraftMenu(tx, menu.id);
 
     const tree = await loadMenuTree(tx, current.id);

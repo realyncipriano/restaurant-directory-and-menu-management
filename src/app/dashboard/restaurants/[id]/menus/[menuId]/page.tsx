@@ -7,6 +7,7 @@ import { startDraftAction } from "@/app/dashboard/restaurants/[id]/menus/actions
 import { MenuAddCategorySection } from "@/components/menus/editor/menu-add-category-section";
 import { MenuCategoryNav } from "@/components/menus/editor/menu-category-nav";
 import { MenuCategorySection } from "@/components/menus/editor/menu-category-section";
+import { MenuDeleteCard } from "@/components/menus/editor/menu-delete-card";
 import { MenuEditorHeader } from "@/components/menus/editor/menu-editor-header";
 import { MenuEditorNotices } from "@/components/menus/editor/menu-editor-notices";
 import { MenuHistoryCards } from "@/components/menus/editor/menu-history-cards";
@@ -54,22 +55,34 @@ export default async function MenuEditorPage({
     throw error;
   }
 
-  const { menu, access, tree, versions, changes } = data;
+  const { menu, access, tree, versions, changes, isDeleted } = data;
   if (menu.restaurantId !== id) notFound();
 
   const { restaurant, flags } = access;
   const notice = typeof query.notice === "string" ? query.notice : undefined;
   const error = typeof query.error === "string" ? query.error : undefined;
-  const { isDraft, restaurantActive, canEdit, canPublish } =
-    deriveMenuEditorFlags({
-      canEditMenu: flags.canEditMenu,
-      canPublishMenu: flags.canPublishMenu,
-      restaurantStatus: restaurant.status,
-      menuStatus: menu.status,
-    });
+  const lineageHasPublished = versions.some(
+    (version) => version.status === "published",
+  );
+  const {
+    isDraft,
+    restaurantActive,
+    canEdit,
+    canPublish,
+    canDelete,
+    canCreateDraft,
+  } = deriveMenuEditorFlags({
+    canEditMenu: flags.canEditMenu,
+    canPublishMenu: flags.canPublishMenu,
+    restaurantStatus: restaurant.status,
+    menuStatus: menu.status,
+    lineageHasPublished,
+    isDeleted,
+  });
   const imageStorageConfigured = isImageStorageConfigured();
   const categoryOptions = buildCategoryOptions(tree.categories);
-  const statusTone = menuStatusTone(menu.status);
+  const displayStatus = isDeleted ? "deleted" : menu.status;
+  const statusTone = menuStatusTone(displayStatus);
   const { noticeMessage, errorMessage } = buildMenuEditorMessages({
     notice,
     error,
@@ -82,7 +95,7 @@ export default async function MenuEditorPage({
         title={menu.title}
         slug={menu.slug}
         version={menu.version}
-        status={menu.status}
+        status={displayStatus}
         statusTone={statusTone}
       />
 
@@ -91,6 +104,7 @@ export default async function MenuEditorPage({
         errorMessage={errorMessage}
         restaurantActive={restaurantActive}
         restaurantName={restaurant.name}
+        deleted={isDeleted}
       />
 
       <MenuCategoryNav
@@ -107,17 +121,21 @@ export default async function MenuEditorPage({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-zinc-900">
-                  {menu.status === "published"
-                    ? "Published menu"
-                    : "Archived version"}
+                  {isDeleted
+                    ? "Deleted menu"
+                    : menu.status === "published"
+                      ? "Published menu"
+                      : "Archived version"}
                 </h2>
                 <p className="mt-1 max-w-xl text-sm leading-6 text-zinc-600">
-                  {menu.status === "published"
-                    ? "This version is live and cannot be edited in place. Create a draft revision to change prices or items without unpublishing."
-                    : "This version has been archived. Editing it creates a new draft from the latest published version."}
+                  {isDeleted
+                    ? "This menu was deleted. Its content and version history remain available for reference."
+                    : menu.status === "published"
+                      ? "This version is live and cannot be edited in place. Create a draft revision to change prices or items without unpublishing."
+                      : "This version has been archived. Editing it creates a new draft from the latest published version."}
                 </p>
               </div>
-              {canEdit ? (
+              {canCreateDraft ? (
                 <form action={startDraftAction}>
                   <input type="hidden" name="restaurantId" value={restaurant.id} />
                   <input type="hidden" name="menuId" value={menu.id} />
@@ -180,6 +198,15 @@ export default async function MenuEditorPage({
           />
         </>
       )}
+
+      {canDelete ? (
+        <MenuDeleteCard
+          restaurantId={restaurant.id}
+          menuId={menu.id}
+          menuTitle={menu.title}
+          hasPublishedVersion={lineageHasPublished}
+        />
+      ) : null}
 
       <MenuHistoryCards
         restaurantId={restaurant.id}
