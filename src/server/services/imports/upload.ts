@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { fileTypeFromBuffer } from "file-type";
 
 import type { DbClient } from "@/db/client";
@@ -198,6 +198,7 @@ export async function confirmMenuImport(
           and(
             eq(menuImports.id, importId),
             eq(menuImports.status, "uploading"),
+            isNull(menuImports.deletedAt),
           ),
         )
         .returning({ id: menuImports.id });

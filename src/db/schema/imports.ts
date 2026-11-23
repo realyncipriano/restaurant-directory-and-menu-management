@@ -76,6 +76,10 @@ export const menuImports = pgTable(
     }),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     appliedAt: timestamp("applied_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    deletedBy: uuid("deleted_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -89,6 +93,7 @@ export const menuImports = pgTable(
       table.status,
     ),
     index("menu_imports_created_idx").on(table.createdAt),
+    index("menu_imports_deleted_idx").on(table.deletedAt),
   ],
 );
 

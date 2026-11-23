@@ -9,6 +9,7 @@ import {
   defaultAppSettings,
   getAppSettings,
   updateAppSettings,
+  updateScanRetention,
 } from "@/server/services/app-settings";
 import type { EphemeralDb } from "./ephemeral-db";
 import { openTestDb, resetTestDb, seedUser } from "../helpers/db";
@@ -92,6 +93,49 @@ describe("app settings (ephemeral PGlite)", () => {
 
     expect(cleared.siteTagline).toBe(defaultAppSettings().siteTagline);
     expect(cleared.supportEmail).toBeNull();
+  });
+
+  it("stores scan retention independently from site identity", async () => {
+    const { admin } = await setup();
+
+    expect((await getAppSettings(db)).scanRetentionDays).toBe(30);
+    expect(await updateScanRetention(db, admin.id, 45)).toBe(45);
+
+    await updateAppSettings(db, admin.id, {
+      siteName: "Tara Kain",
+      siteTagline: "",
+      supportEmail: "",
+    });
+
+    expect((await getAppSettings(db)).scanRetentionDays).toBe(45);
+
+    const audits = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, "settings_updated"));
+    expect(
+      audits.some((row) => row.entityId === "scan_retention"),
+    ).toBe(true);
+  });
+
+  it("rejects invalid scan retention values and non-admin actors", async () => {
+    const { admin, member } = await setup();
+
+    await expect(
+      updateScanRetention(db, member.id, 10),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    await expect(
+      updateScanRetention(db, admin.id, 0),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      updateScanRetention(db, admin.id, 3651),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      updateScanRetention(db, admin.id, "not-a-number"),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    expect((await getAppSettings(db)).scanRetentionDays).toBe(30);
   });
 
   it("rejects invalid values and non-admin actors", async () => {

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Settings } from "lucide-react";
 
 import { getDb } from "@/db/client";
+import { ScanRetentionForm } from "@/components/settings/scan-retention-form";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
@@ -35,7 +36,7 @@ export default async function AppSettingsPage({
       <PageHeader
         icon={<Settings className="h-5 w-5" aria-hidden="true" />}
         title="App settings"
-        description="Public-facing site identity. These values are shown to visitors across the directory page, restaurant pages, and the footer."
+        description="Public-facing site identity and how long deleted menu scans are kept before permanent removal."
       />
 
       {notice ? (
@@ -45,21 +46,36 @@ export default async function AppSettingsPage({
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <Card>
-          <CardHeader
-            title="Site identity"
-            description="Changes take effect immediately on the public site."
-          />
-          <CardBody>
-            <SettingsForm
-              values={{
-                siteName: settings.siteName,
-                siteTagline: settings.siteTagline,
-                supportEmail: settings.supportEmail ?? "",
-              }}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader
+              title="Site identity"
+              description="Changes take effect immediately on the public site."
             />
-          </CardBody>
-        </Card>
+            <CardBody>
+              <SettingsForm
+                values={{
+                  siteName: settings.siteName,
+                  siteTagline: settings.siteTagline,
+                  supportEmail: settings.supportEmail ?? "",
+                }}
+              />
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Scan history"
+              description="Soft-deleted scans are hidden immediately. Permanent removal happens automatically after the retention period."
+            />
+            <CardBody>
+              <ScanRetentionForm
+                retentionDays={settings.scanRetentionDays}
+                defaultRetentionDays={defaults.scanRetentionDays}
+              />
+            </CardBody>
+          </Card>
+        </div>
 
         <div className="space-y-4">
           <Card>
@@ -93,6 +109,13 @@ export default async function AppSettingsPage({
                     {settings.supportEmail ?? "Not set"}
                   </dd>
                 </div>
+                <div className="flex justify-between gap-3">
+                  <dt>Scan retention</dt>
+                  <dd className="truncate text-right text-zinc-700">
+                    {settings.scanRetentionDays} day
+                    {settings.scanRetentionDays === 1 ? "" : "s"}
+                  </dd>
+                </div>
               </dl>
 
               <p className="mt-4 text-[11px] leading-5 text-zinc-500">
@@ -100,8 +123,9 @@ export default async function AppSettingsPage({
                 <code className="rounded bg-zinc-100 px-1 py-0.5">
                   NEXT_PUBLIC_APP_NAME
                 </code>{" "}
-                environment variable. Changing settings here does not affect
-                stored data or permissions.
+                environment variable. Scan retention only controls when
+                soft-deleted scans are purged; it never changes menu content or
+                permissions.
               </p>
             </CardBody>
           </Card>

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { menuImports } from "@/db/schema";
 import type { DbExecutor } from "@/db/types";
@@ -14,7 +14,9 @@ export async function lockImportForReview(
   const [locked] = await tx
     .select({ id: menuImports.id, status: menuImports.status })
     .from(menuImports)
-    .where(eq(menuImports.id, importId))
+    .where(
+      and(eq(menuImports.id, importId), isNull(menuImports.deletedAt)),
+    )
     .for("update")
     .limit(1);
 

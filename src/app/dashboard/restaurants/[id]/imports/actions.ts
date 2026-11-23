@@ -14,6 +14,7 @@ import {
   confirmMenuImport,
   keepOnlyImportCategory,
   processMenuImport,
+  softDeleteMenuImport,
   updateImportCategoryDecision,
   updateImportItem,
   type BeginImportResult,
@@ -286,5 +287,25 @@ export async function applyImportAction(
   revalidateImportPaths(restaurantId, importId);
   redirect(
     `/dashboard/restaurants/${restaurantId}/menus/${menuId}?notice=import-applied`,
+  );
+}
+
+export async function deleteImportAction(formData: FormData): Promise<void> {
+  const actorId = await getActionUserId();
+  if (!actorId) redirect("/login");
+  const restaurantId = formString(formData, "restaurantId");
+  const importId = formString(formData, "importId");
+
+  try {
+    await softDeleteMenuImport(getDb(), actorId, importId);
+  } catch {
+    redirect(
+      `/dashboard/restaurants/${restaurantId}/imports?error=delete-scan`,
+    );
+  }
+
+  revalidateImportPaths(restaurantId, importId);
+  redirect(
+    `/dashboard/restaurants/${restaurantId}/imports?notice=scan-deleted`,
   );
 }

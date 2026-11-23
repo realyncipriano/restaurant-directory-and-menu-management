@@ -1,6 +1,6 @@
 import "server-only";
 
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 
 import type { DbClient } from "@/db/client";
 import {
@@ -10,8 +10,10 @@ import {
   menus,
 } from "@/db/schema";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { getAppSettings } from "../app-settings";
 import { getMenuAccess } from "../menu-access";
 import { requireRestaurantPermission } from "../restaurant-access";
+import { purgeExpiredMenuImports } from "./purge";
 
 export async function listMenuImports(
   db: DbClient,
@@ -25,6 +27,11 @@ export async function listMenuImports(
     "viewManagement",
   );
 
+  const settings = await getAppSettings(db);
+  await purgeExpiredMenuImports(db, {
+    retentionDays: settings.scanRetentionDays,
+  });
+
   const rows = await db
     .select({
       menuImport: menuImports,
@@ -33,10 +40,19 @@ export async function listMenuImports(
     })
     .from(menuImports)
     .leftJoin(menus, eq(menuImports.menuId, menus.id))
-    .where(eq(menuImports.restaurantId, restaurantId))
+    .where(
+      and(
+        eq(menuImports.restaurantId, restaurantId),
+        isNull(menuImports.deletedAt),
+      ),
+    )
     .orderBy(desc(menuImports.createdAt));
 
-  return { access, imports: rows };
+  return {
+    access,
+    imports: rows,
+    retentionDays: settings.scanRetentionDays,
+  };
 }
 
 export async function getMenuImport(
@@ -48,7 +64,9 @@ export async function getMenuImport(
     .select({ menuImport: menuImports, menu: menus })
     .from(menuImports)
     .innerJoin(menus, eq(menuImports.menuId, menus.id))
-    .where(eq(menuImports.id, importId))
+    .where(
+      and(eq(menuImports.id, importId), isNull(menuImports.deletedAt)),
+    )
     .limit(1);
   if (!row) throw new NotFoundError("Import not found.");
 

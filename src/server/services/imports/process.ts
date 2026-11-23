@@ -40,7 +40,9 @@ export async function processMenuImport(
   const [row] = await db
     .select({ menuImport: menuImports })
     .from(menuImports)
-    .where(eq(menuImports.id, importId))
+    .where(
+      and(eq(menuImports.id, importId), isNull(menuImports.deletedAt)),
+    )
     .limit(1);
   if (!row) throw new NotFoundError("Import not found.");
   if (!row.menuImport.menuId) {
@@ -104,6 +106,7 @@ export async function processMenuImport(
     .where(
       and(
         eq(menuImports.id, importId),
+        isNull(menuImports.deletedAt),
         or(
           inArray(menuImports.status, ["uploaded", "failed"]),
           and(
@@ -244,6 +247,7 @@ export async function processMenuImport(
           and(
             eq(menuImports.id, importId),
             eq(menuImports.processingToken, processingToken),
+            isNull(menuImports.deletedAt),
           ),
         )
         .returning({ id: menuImports.id });
@@ -282,6 +286,7 @@ export async function processMenuImport(
         and(
           eq(menuImports.id, importId),
           eq(menuImports.processingToken, processingToken),
+          isNull(menuImports.deletedAt),
         ),
       )
       .limit(1);
@@ -319,6 +324,7 @@ export async function processMenuImport(
         and(
           eq(menuImports.id, importId),
           eq(menuImports.processingToken, processingToken),
+          isNull(menuImports.deletedAt),
         ),
       );
     await db

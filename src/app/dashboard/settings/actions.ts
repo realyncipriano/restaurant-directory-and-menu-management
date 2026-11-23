@@ -8,7 +8,10 @@ import { formStateFromError } from "@/lib/action-error";
 import { formString, type FormState } from "@/lib/action-state";
 import { getActionAdminId } from "@/lib/auth/action-user";
 import { ForbiddenError } from "@/lib/errors";
-import { updateAppSettings } from "@/server/services/app-settings";
+import {
+  updateAppSettings,
+  updateScanRetention,
+} from "@/server/services/app-settings";
 
 export async function updateSettingsAction(
   _prevState: FormState,
@@ -31,4 +34,27 @@ export async function updateSettingsAction(
 
   revalidatePath("/", "layout");
   redirect("/dashboard/settings?notice=saved");
+}
+
+export async function updateScanRetentionAction(
+  _prevState: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const adminId = await getActionAdminId();
+  if (!adminId) {
+    return formStateFromError(new ForbiddenError());
+  }
+
+  try {
+    await updateScanRetention(
+      getDb(),
+      adminId,
+      formString(formData, "scanRetentionDays"),
+    );
+  } catch (error) {
+    return formStateFromError(error);
+  }
+
+  revalidatePath("/dashboard/settings");
+  return { success: "Scan retention updated." };
 }
