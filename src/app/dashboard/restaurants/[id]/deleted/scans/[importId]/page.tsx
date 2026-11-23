@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
-import { ArrowLeft, ScanLine } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  ScanLine,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ReviewItemIndicators } from "@/components/imports/review/review-item-indicators";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Notice } from "@/components/ui/notice";
@@ -12,6 +18,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { getDb } from "@/db/client";
 import { requireAdminUser } from "@/lib/auth/guards";
 import { NotFoundError } from "@/lib/errors";
+import { paginateImportReviewGroups } from "@/lib/import-review-pagination";
 import {
   buildImportReviewView,
   type ReviewItem,
@@ -44,6 +51,21 @@ const statusTones: Record<string, BadgeTone> = {
 
 function dayLabel(days: number): string {
   return `${days} day${days === 1 ? "" : "s"}`;
+}
+
+function requestedPageNumber(value: string | string[] | undefined): number {
+  const raw = typeof value === "string" ? value.trim() : "";
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : 1;
+}
+
+function scanItemsHref(
+  restaurantId: string,
+  importId: string,
+  page: number,
+): string {
+  const base = `/dashboard/restaurants/${restaurantId}/deleted/scans/${importId}`;
+  return page > 1 ? `${base}?page=${page}` : base;
 }
 
 function ReadOnlyItem({ item }: { item: ReviewItem }) {
@@ -86,11 +108,15 @@ function ReadOnlyItem({ item }: { item: ReviewItem }) {
 
 export default async function DeletedScanPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; importId: string }>;
+  searchParams: Promise<{ page?: string | string[] }>;
 }) {
   const admin = await requireAdminUser();
   const { id, importId } = await params;
+  const query = await searchParams;
+  const requestedPage = requestedPageNumber(query.page);
 
   let restaurant;
   let data;
@@ -106,6 +132,9 @@ export default async function DeletedScanPage({
 
   const record = data.import;
   const view = buildImportReviewView(data.items);
+  const pagination = paginateImportReviewGroups(view.visibleGroups, {
+    page: requestedPage,
+  });
   const purgeAfter = new Date(
     record.deletedAt.getTime() + data.retentionDays * DAY_MS,
   );
@@ -237,6 +266,9 @@ export default async function DeletedScanPage({
             Extracted items
           </h2>
           <p className="text-xs text-zinc-500">
+            {pagination.pageCount > 1
+              ? `Page ${pagination.page} of ${pagination.pageCount} · `
+              : ""}
             {view.counts.total} item{view.counts.total === 1 ? "" : "s"} ·{" "}
             {view.counts.pending} pending · {view.counts.accepted} accepted ·{" "}
             {view.counts.rejected} rejected
@@ -250,14 +282,16 @@ export default async function DeletedScanPage({
           />
         ) : (
           <div className="space-y-5">
-            {view.visibleGroups.map((group) => (
+            {pagination.groups.map((group) => (
               <section key={group.name} className="space-y-3">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <h3 className="text-sm font-semibold text-zinc-900">
                     {group.name}
                   </h3>
                   <p className="text-xs text-zinc-500">
-                    {group.total} item{group.total === 1 ? "" : "s"}
+                    {group.items.length < group.total
+                      ? `${group.items.length} of ${group.total} items on this page`
+                      : `${group.total} item${group.total === 1 ? "" : "s"}`}
                   </p>
                 </div>
                 <div className="space-y-3">
@@ -269,6 +303,68 @@ export default async function DeletedScanPage({
             ))}
           </div>
         )}
+
+        {pagination.pageCount > 1 ? (
+          <nav
+            aria-label="Extracted items pagination"
+            className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200 pt-3"
+          >
+            {pagination.page > 1 ? (
+              <Link
+                href={scanItemsHref(
+                  restaurant.id,
+                  importId,
+                  pagination.page - 1,
+                )}
+                className={buttonClass({ variant: "outline", size: "sm" })}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                Newer
+              </Link>
+            ) : (
+              <span
+                className={buttonClass({
+                  variant: "outline",
+                  size: "sm",
+                  className: "pointer-events-none opacity-40",
+                })}
+                aria-disabled="true"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                Newer
+              </span>
+            )}
+            <span className="text-xs text-zinc-500">
+              Showing {pagination.firstItem}–{pagination.lastItem} of{" "}
+              {pagination.total}
+            </span>
+            {pagination.page < pagination.pageCount ? (
+              <Link
+                href={scanItemsHref(
+                  restaurant.id,
+                  importId,
+                  pagination.page + 1,
+                )}
+                className={buttonClass({ variant: "outline", size: "sm" })}
+              >
+                Older
+                <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
+            ) : (
+              <span
+                className={buttonClass({
+                  variant: "outline",
+                  size: "sm",
+                  className: "pointer-events-none opacity-40",
+                })}
+                aria-disabled="true"
+              >
+                Older
+                <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </span>
+            )}
+          </nav>
+        ) : null}
       </section>
 
       <div>
