@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { DbClient } from "@/db/client";
 import {
+  auditLogs,
   menuImportItems,
   menuImportPages,
   menuImports,
@@ -115,6 +116,54 @@ describe("deleted items admin view (ephemeral PGlite)", () => {
     );
   }
 
+  async function seedDeletedMenus(
+    ctx: Awaited<ReturnType<typeof setup>>,
+    count: number,
+  ) {
+    const base = Date.now() - 60 * 60 * 1000;
+    const rows = await db
+      .insert(menus)
+      .values(
+        Array.from({ length: count }, (_, index) => ({
+          restaurantId: ctx.restaurant.id,
+          title: `Deleted menu ${index + 1}`,
+          slug: `deleted-menu-${index + 1}`,
+          status: "archived" as const,
+          version: 1,
+          createdBy: ctx.admin.id,
+        })),
+      )
+      .returning({
+        id: menus.id,
+        lineageId: menus.lineageId,
+        title: menus.title,
+        slug: menus.slug,
+      });
+
+    await db.insert(auditLogs).values(
+      rows.map((row, index) => ({
+        actorId: ctx.admin.id,
+        actorEmail: ctx.admin.email,
+        action: "menu_deleted",
+        entityType: "menu",
+        entityId: row.id,
+        createdAt: new Date(base - index * 60_000),
+        details: { hadPublished: false },
+      })),
+    );
+
+    return rows
+      .map((row, index) => ({
+        ...row,
+        deletedAt: new Date(base - index * 60_000),
+      }))
+      .sort(
+        (left, right) =>
+          right.deletedAt.getTime() - left.deletedAt.getTime() ||
+          right.id.localeCompare(left.id),
+      );
+  }
+
   it("lists deleted menus and soft-deleted scans for admins", async () => {
     const { admin, restaurant, menu, importRecord } = await setup();
 
@@ -124,6 +173,10 @@ describe("deleted items admin view (ephemeral PGlite)", () => {
     const data = await listDeletedItems(db, admin.id, restaurant.id);
 
     expect(data.retentionDays).toBe(30);
+    expect(data.menuTotal).toBe(1);
+    expect(data.menuPage).toBe(1);
+    expect(data.menuPageCount).toBe(1);
+    expect(data.menuPageSize).toBe(15);
     expect(data.menus).toHaveLength(1);
     expect(data.menus[0]).toMatchObject({
       lineageId: menu.lineageId,
@@ -218,6 +271,76 @@ describe("deleted items admin view (ephemeral PGlite)", () => {
     expect(tooHigh.scans[1]?.id).toBe(seeded[16]?.id);
   });
 
+  it("paginates deleted menus 15 at a time, newest first", async () => {
+    const ctx = await setup();
+    const seeded = await seedDeletedMenus(ctx, 17);
+
+    const firstPage = await listDeletedItems(
+      db,
+      ctx.admin.id,
+      ctx.restaurant.id,
+    );
+
+    expect(firstPage.menuTotal).toBe(17);
+    expect(firstPage.menuPage).toBe(1);
+    expect(firstPage.menuPageCount).toBe(2);
+    expect(firstPage.menuPageSize).toBe(15);
+    expect(firstPage.menus).toHaveLength(15);
+    expect(firstPage.menus.map((menu) => menu.menuId)).toEqual(
+      seeded.slice(0, 15).map((menu) => menu.id),
+    );
+
+    const secondPage = await listDeletedItems(
+      db,
+      ctx.admin.id,
+      ctx.restaurant.id,
+      { page: 2 },
+    );
+
+    expect(secondPage.menuTotal).toBe(17);
+    expect(secondPage.menuPage).toBe(2);
+    expect(secondPage.menuPageCount).toBe(2);
+    expect(secondPage.menus).toHaveLength(2);
+    expect(secondPage.menus.map((menu) => menu.menuId)).toEqual(
+      seeded.slice(15).map((menu) => menu.id),
+    );
+
+    const seen = new Set(
+      [...firstPage.menus, ...secondPage.menus].map((menu) => menu.menuId),
+    );
+    expect(seen.size).toBe(17);
+  });
+
+  it("clamps out-of-range menu pages", async () => {
+    const ctx = await setup();
+    const seeded = await seedDeletedMenus(ctx, 17);
+
+    const zero = await listDeletedItems(db, ctx.admin.id, ctx.restaurant.id, {
+      page: 0,
+    });
+    expect(zero.menuPage).toBe(1);
+    expect(zero.menus[0]?.menuId).toBe(seeded[0]?.id);
+
+    const negative = await listDeletedItems(
+      db,
+      ctx.admin.id,
+      ctx.restaurant.id,
+      { page: -4 },
+    );
+    expect(negative.menuPage).toBe(1);
+    expect(negative.menus).toHaveLength(15);
+
+    const tooHigh = await listDeletedItems(
+      db,
+      ctx.admin.id,
+      ctx.restaurant.id,
+      { page: 99 },
+    );
+    expect(tooHigh.menuPage).toBe(2);
+    expect(tooHigh.menus).toHaveLength(2);
+    expect(tooHigh.menus[1]?.menuId).toBe(seeded[16]?.id);
+  });
+
   it("reports an empty scan page when nothing was deleted", async () => {
     const ctx = await setup();
 
@@ -227,6 +350,10 @@ describe("deleted items admin view (ephemeral PGlite)", () => {
     expect(data.scanPage).toBe(1);
     expect(data.scanPageCount).toBe(1);
     expect(data.scans).toEqual([]);
+    expect(data.menuTotal).toBe(0);
+    expect(data.menuPage).toBe(1);
+    expect(data.menuPageCount).toBe(1);
+    expect(data.menuPageSize).toBe(15);
     expect(data.menus).toEqual([]);
   });
 

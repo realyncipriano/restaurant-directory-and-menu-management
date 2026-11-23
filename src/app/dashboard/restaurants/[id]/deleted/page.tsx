@@ -62,6 +62,11 @@ function scansPageHref(restaurantId: string, page: number): string {
   return `/dashboard/restaurants/${restaurantId}/deleted?${params.toString()}`;
 }
 
+function menusPageHref(restaurantId: string, page: number): string {
+  const base = `/dashboard/restaurants/${restaurantId}/deleted`;
+  return page > 1 ? `${base}?page=${page}` : base;
+}
+
 function dayLabel(days: number): string {
   return `${days} day${days === 1 ? "" : "s"}`;
 }
@@ -101,6 +106,12 @@ export default async function DeletedItemsPage({
   }
 
   const retentionLabel = dayLabel(data.retentionDays);
+  const firstMenu =
+    data.menuTotal === 0 ? 0 : (data.menuPage - 1) * data.menuPageSize + 1;
+  const lastMenu = Math.min(
+    data.menuPage * data.menuPageSize,
+    data.menuTotal,
+  );
   const firstScan =
     data.scanTotal === 0 ? 0 : (data.scanPage - 1) * data.scanPageSize + 1;
   const lastScan = Math.min(
@@ -143,7 +154,7 @@ export default async function DeletedItemsPage({
           <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
           Deleted menus
           <span className="rounded-full bg-zinc-200/80 px-1.5 py-0.5 text-[11px] leading-none text-zinc-600">
-            {data.menus.length}
+            {data.menuTotal}
           </span>
         </Link>
         <Link
@@ -161,52 +172,109 @@ export default async function DeletedItemsPage({
 
       {tab === "menus" ? (
         <section className="space-y-4" aria-label="Deleted menus">
-          {data.menus.length === 0 ? (
+          {data.menuTotal === 0 ? (
             <EmptyState
               icon={<BookOpen className="h-6 w-6" aria-hidden="true" />}
               title="No deleted menus"
               description="Menus deleted from this restaurant will appear here with a link to their read-only content and version history."
             />
           ) : (
-            <ul className="space-y-3">
-              {data.menus.map((menu) => (
-                <li
-                  key={menu.lineageId}
-                  className="rounded-2xl border border-zinc-200 bg-surface p-4 shadow-sm"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge tone="danger">deleted</Badge>
-                        <h3 className="text-sm font-semibold text-zinc-900">
-                          {menu.title}
-                        </h3>
+            <>
+              <ul className="space-y-3">
+                {data.menus.map((menu) => (
+                  <li
+                    key={menu.lineageId}
+                    className="rounded-2xl border border-zinc-200 bg-surface p-4 shadow-sm"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge tone="danger">deleted</Badge>
+                          <h3 className="text-sm font-semibold text-zinc-900">
+                            {menu.title}
+                          </h3>
+                        </div>
+                        <p className="mt-0.5 truncate font-mono text-xs text-zinc-500">
+                          /{menu.slug}
+                        </p>
+                        <p className="mt-2 text-xs leading-5 text-zinc-500">
+                          Deleted {dateFormatter.format(menu.deletedAt)}
+                          {menu.deletedByEmail
+                            ? ` by ${menu.deletedByEmail}`
+                            : ""}{" "}
+                          · {menu.versionCount} version
+                          {menu.versionCount === 1 ? "" : "s"}
+                          {menu.hadPublished
+                            ? " · had a published version"
+                            : ""}
+                        </p>
                       </div>
-                      <p className="mt-0.5 truncate font-mono text-xs text-zinc-500">
-                        /{menu.slug}
-                      </p>
-                      <p className="mt-2 text-xs leading-5 text-zinc-500">
-                        Deleted {dateFormatter.format(menu.deletedAt)}
-                        {menu.deletedByEmail
-                          ? ` by ${menu.deletedByEmail}`
-                          : ""}{" "}
-                        · {menu.versionCount} version
-                        {menu.versionCount === 1 ? "" : "s"}
-                        {menu.hadPublished ? " · had a published version" : ""}
-                      </p>
-                    </div>
 
-                    <Link
-                      href={`/dashboard/restaurants/${restaurant.id}/menus/${menu.menuId}`}
-                      className={buttonClass({ variant: "outline", size: "sm" })}
-                    >
-                      Open read-only menu
-                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                    </Link>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                      <Link
+                        href={`/dashboard/restaurants/${restaurant.id}/menus/${menu.menuId}`}
+                        className={buttonClass({
+                          variant: "outline",
+                          size: "sm",
+                        })}
+                      >
+                        Open read-only menu
+                        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Link>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200 pt-4">
+                {data.menuPage > 1 ? (
+                  <Link
+                    href={menusPageHref(restaurant.id, data.menuPage - 1)}
+                    scroll={false}
+                    className={buttonClass({ variant: "outline", size: "sm" })}
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                    Newer
+                  </Link>
+                ) : (
+                  <span
+                    className={buttonClass({
+                      variant: "outline",
+                      size: "sm",
+                      className: "pointer-events-none opacity-40",
+                    })}
+                    aria-disabled="true"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                    Newer
+                  </span>
+                )}
+                <span className="text-xs text-zinc-500">
+                  Showing {firstMenu}–{lastMenu} of {data.menuTotal}
+                </span>
+                {data.menuPage < data.menuPageCount ? (
+                  <Link
+                    href={menusPageHref(restaurant.id, data.menuPage + 1)}
+                    scroll={false}
+                    className={buttonClass({ variant: "outline", size: "sm" })}
+                  >
+                    Older
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Link>
+                ) : (
+                  <span
+                    className={buttonClass({
+                      variant: "outline",
+                      size: "sm",
+                      className: "pointer-events-none opacity-40",
+                    })}
+                    aria-disabled="true"
+                  >
+                    Older
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                )}
+              </div>
+            </>
           )}
         </section>
       ) : (
@@ -282,6 +350,7 @@ export default async function DeletedItemsPage({
                 {data.scanPage > 1 ? (
                   <Link
                     href={scansPageHref(restaurant.id, data.scanPage - 1)}
+                    scroll={false}
                     className={buttonClass({ variant: "outline", size: "sm" })}
                   >
                     <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
@@ -306,6 +375,7 @@ export default async function DeletedItemsPage({
                 {data.scanPage < data.scanPageCount ? (
                   <Link
                     href={scansPageHref(restaurant.id, data.scanPage + 1)}
+                    scroll={false}
                     className={buttonClass({ variant: "outline", size: "sm" })}
                   >
                     Older

@@ -28,6 +28,7 @@ export type DeletedMenuSummary = {
   deletedByEmail: string | null;
 };
 
+export const DELETED_MENUS_PAGE_SIZE = 15;
 export const DELETED_SCANS_PAGE_SIZE = 15;
 
 export type DeletedScanSummary = {
@@ -46,7 +47,15 @@ export type DeletedScanSummary = {
 async function listDeletedMenus(
   db: DbClient,
   restaurantId: string,
-): Promise<DeletedMenuSummary[]> {
+  options: { page?: number } = {},
+): Promise<{
+  menus: DeletedMenuSummary[];
+  total: number;
+  page: number;
+  pageCount: number;
+  pageSize: number;
+}> {
+  const pageSize = DELETED_MENUS_PAGE_SIZE;
   const rows = await db
     .select({
       menuId: menus.id,
@@ -67,7 +76,7 @@ async function listDeletedMenus(
         eq(menus.restaurantId, restaurantId),
       ),
     )
-    .orderBy(desc(auditLogs.createdAt));
+    .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id));
 
   const latestByLineage = new Map<string, (typeof rows)[number]>();
   for (const row of rows) {
@@ -76,28 +85,46 @@ async function listDeletedMenus(
     }
   }
 
-  if (latestByLineage.size === 0) return [];
+  const ordered = [...latestByLineage.values()];
+  const total = ordered.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const requestedPage = options.page ?? 1;
+  const page = Number.isFinite(requestedPage)
+    ? Math.min(Math.max(1, Math.floor(requestedPage)), pageCount)
+    : 1;
+
+  if (total === 0) {
+    return { menus: [], total, page, pageCount, pageSize };
+  }
+
+  const pageRows = ordered.slice((page - 1) * pageSize, page * pageSize);
 
   const versionCounts = await db
     .select({ lineageId: menus.lineageId, total: count() })
     .from(menus)
-    .where(inArray(menus.lineageId, [...latestByLineage.keys()]))
+    .where(inArray(menus.lineageId, pageRows.map((row) => row.lineageId)))
     .groupBy(menus.lineageId);
   const countsByLineage = new Map(
     versionCounts.map((row) => [row.lineageId, row.total] as const),
   );
 
-  return [...latestByLineage.values()].map((row) => ({
-    lineageId: row.lineageId,
-    menuId: row.menuId,
-    title: row.title,
-    slug: row.slug,
-    version: row.version,
-    versionCount: countsByLineage.get(row.lineageId) ?? 1,
-    hadPublished: row.details?.hadPublished === true,
-    deletedAt: row.deletedAt,
-    deletedByEmail: row.deletedByEmail,
-  }));
+  return {
+    menus: pageRows.map((row) => ({
+      lineageId: row.lineageId,
+      menuId: row.menuId,
+      title: row.title,
+      slug: row.slug,
+      version: row.version,
+      versionCount: countsByLineage.get(row.lineageId) ?? 1,
+      hadPublished: row.details?.hadPublished === true,
+      deletedAt: row.deletedAt,
+      deletedByEmail: row.deletedByEmail,
+    })),
+    total,
+    page,
+    pageCount,
+    pageSize,
+  };
 }
 
 async function listDeletedScans(
@@ -201,12 +228,16 @@ export async function listDeletedItems(
   });
 
   const [deletedMenus, deletedScans] = await Promise.all([
-    listDeletedMenus(db, restaurantId),
+    listDeletedMenus(db, restaurantId, { page: options.page }),
     listDeletedScans(db, restaurantId, { page: options.page }),
   ]);
 
   return {
-    menus: deletedMenus,
+    menus: deletedMenus.menus,
+    menuTotal: deletedMenus.total,
+    menuPage: deletedMenus.page,
+    menuPageCount: deletedMenus.pageCount,
+    menuPageSize: deletedMenus.pageSize,
     scans: deletedScans.scans,
     scanTotal: deletedScans.total,
     scanPage: deletedScans.page,
