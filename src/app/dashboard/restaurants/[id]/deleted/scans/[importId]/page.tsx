@@ -316,6 +316,7 @@ export default async function DeletedScanPage({
                   importId,
                   pagination.page - 1,
                 )}
+                scroll={false}
                 className={buttonClass({ variant: "outline", size: "sm" })}
               >
                 <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
@@ -345,6 +346,7 @@ export default async function DeletedScanPage({
                   importId,
                   pagination.page + 1,
                 )}
+                scroll={false}
                 className={buttonClass({ variant: "outline", size: "sm" })}
               >
                 Older
