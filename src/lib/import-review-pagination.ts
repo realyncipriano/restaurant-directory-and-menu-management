@@ -1,6 +1,6 @@
 import type { ImportReviewGroup } from "@/lib/import-review-view";
 
-export const IMPORT_REVIEW_PAGE_SIZE = 20;
+export const IMPORT_REVIEW_PAGE_SIZE = 5;
 
 export type PaginatedImportReviewGroups = {
   groups: ImportReviewGroup[];

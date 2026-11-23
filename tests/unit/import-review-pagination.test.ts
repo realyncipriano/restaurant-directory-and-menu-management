@@ -31,10 +31,10 @@ function items(
 }
 
 describe("import review pagination", () => {
-  it("paginates grouped items while preserving category order", () => {
+  it("paginates grouped items five at a time while preserving category order", () => {
     const groups = buildImportReviewView([
-      ...items(25, "Mains"),
-      ...items(5, "Drinks", 25),
+      ...items(23, "Mains"),
+      ...items(7, "Drinks", 23),
     ]).visibleGroups;
 
     const firstPage = paginateImportReviewGroups(groups);
@@ -42,50 +42,67 @@ describe("import review pagination", () => {
     expect(firstPage).toMatchObject({
       total: 30,
       page: 1,
-      pageCount: 2,
-      pageSize: 20,
+      pageCount: 6,
+      pageSize: 5,
       firstItem: 1,
-      lastItem: 20,
+      lastItem: 5,
     });
     expect(
       firstPage.groups.map((group) => [group.name, group.items.length]),
-    ).toEqual([["Mains", 20]]);
+    ).toEqual([["Mains", 5]]);
 
-    const secondPage = paginateImportReviewGroups(groups, { page: 2 });
+    const spanningPage = paginateImportReviewGroups(groups, { page: 5 });
 
-    expect(secondPage).toMatchObject({
+    expect(spanningPage).toMatchObject({
       total: 30,
-      page: 2,
-      pageCount: 2,
+      page: 5,
+      pageCount: 6,
       firstItem: 21,
-      lastItem: 30,
+      lastItem: 25,
     });
     expect(
-      secondPage.groups.map((group) => [group.name, group.items.length]),
+      spanningPage.groups.map((group) => [group.name, group.items.length]),
     ).toEqual([
-      ["Mains", 5],
-      ["Drinks", 5],
+      ["Mains", 3],
+      ["Drinks", 2],
     ]);
-    expect(secondPage.groups[0]?.items.map((item) => item.id)).toEqual([
+    expect(
+      spanningPage.groups.flatMap((group) =>
+        group.items.map((item) => item.id),
+      ),
+    ).toEqual([
       "Mains-20",
       "Mains-21",
       "Mains-22",
-      "Mains-23",
-      "Mains-24",
+      "Drinks-23",
+      "Drinks-24",
     ]);
+
+    const lastPage = paginateImportReviewGroups(groups, { page: 6 });
+
+    expect(lastPage).toMatchObject({
+      total: 30,
+      page: 6,
+      pageCount: 6,
+      firstItem: 26,
+      lastItem: 30,
+    });
+    expect(
+      lastPage.groups.map((group) => [group.name, group.items.length]),
+    ).toEqual([["Drinks", 5]]);
   });
 
   it("clamps pages below and above the available range", () => {
     const groups = buildImportReviewView([
-      ...items(25, "Mains"),
-      ...items(5, "Drinks", 25),
+      ...items(23, "Mains"),
+      ...items(7, "Drinks", 23),
     ]).visibleGroups;
 
     expect(paginateImportReviewGroups(groups, { page: 0 }).page).toBe(1);
     expect(paginateImportReviewGroups(groups, { page: -4 }).page).toBe(1);
     expect(paginateImportReviewGroups(groups, { page: 99 })).toMatchObject({
-      page: 2,
-      firstItem: 21,
+      page: 6,
+      firstItem: 26,
       lastItem: 30,
     });
     expect(paginateImportReviewGroups(groups, { page: Number.NaN }).page).toBe(
@@ -99,7 +116,7 @@ describe("import review pagination", () => {
       total: 0,
       page: 1,
       pageCount: 1,
-      pageSize: 20,
+      pageSize: 5,
       firstItem: 0,
       lastItem: 0,
     });
