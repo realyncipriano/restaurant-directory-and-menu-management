@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
-import { ArrowRight, BookOpen, FilePenLine, Plus, ScanLine } from "lucide-react";
+import {
+  ArrowRight,
+  BookOpen,
+  FilePenLine,
+  Plus,
+  ScanLine,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -62,13 +69,24 @@ export default async function RestaurantMenusPage({
         title="Menus"
         description="Published menus are live and read-only. Make changes in a draft, then publish to replace the current version."
         actions={
-          <Link
-            href={`/dashboard/restaurants/${restaurant.id}/imports`}
-            className={buttonClass({ variant: "outline" })}
-          >
-            <ScanLine className="h-4 w-4" aria-hidden="true" />
-            Scan a menu
-          </Link>
+          <>
+            {user.role === "admin" ? (
+              <Link
+                href={`/dashboard/restaurants/${restaurant.id}/deleted`}
+                className={buttonClass({ variant: "outline" })}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                Deleted items
+              </Link>
+            ) : null}
+            <Link
+              href={`/dashboard/restaurants/${restaurant.id}/imports`}
+              className={buttonClass({ variant: "outline" })}
+            >
+              <ScanLine className="h-4 w-4" aria-hidden="true" />
+              Scan a menu
+            </Link>
+          </>
         }
       />
 

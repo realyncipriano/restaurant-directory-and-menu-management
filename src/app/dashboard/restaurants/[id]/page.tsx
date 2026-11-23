@@ -9,6 +9,7 @@ import {
   Pencil,
   Phone,
   ShieldCheck,
+  Trash2,
   UtensilsCrossed,
 } from "lucide-react";
 import Link from "next/link";
@@ -113,6 +114,15 @@ export default async function RestaurantDetailPage({
               >
                 <Pencil className="h-4 w-4" aria-hidden="true" />
                 Edit details
+              </Link>
+            ) : null}
+            {isAdmin ? (
+              <Link
+                href={`/dashboard/restaurants/${restaurant.id}/deleted`}
+                className={buttonClass({ variant: "outline" })}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                Deleted items
               </Link>
             ) : null}
             {isAdmin ? (

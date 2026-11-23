@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ScanLine } from "lucide-react";
+import { ScanLine, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -94,6 +94,17 @@ export default async function MenuImportsPage({
         backLabel="Menus"
         title="Menu scans"
         description="Upload menu photos, extract items into a review queue, and apply only the items you accept to a draft menu. Published menus are never changed directly."
+        actions={
+          user.role === "admin" ? (
+            <Link
+              href={`/dashboard/restaurants/${restaurant.id}/deleted`}
+              className={buttonClass({ variant: "outline" })}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              Deleted items
+            </Link>
+          ) : null
+        }
       />
 
       {notice === "scan-deleted" ? (
