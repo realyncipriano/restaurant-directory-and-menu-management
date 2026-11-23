@@ -28,6 +28,8 @@ export type DeletedMenuSummary = {
   deletedByEmail: string | null;
 };
 
+export const DELETED_SCANS_PAGE_SIZE = 15;
+
 export type DeletedScanSummary = {
   id: string;
   menuId: string | null;
@@ -101,7 +103,35 @@ async function listDeletedMenus(
 async function listDeletedScans(
   db: DbClient,
   restaurantId: string,
-): Promise<DeletedScanSummary[]> {
+  options: { page?: number } = {},
+): Promise<{
+  scans: DeletedScanSummary[];
+  total: number;
+  page: number;
+  pageCount: number;
+  pageSize: number;
+}> {
+  const pageSize = DELETED_SCANS_PAGE_SIZE;
+  const where = and(
+    eq(menuImports.restaurantId, restaurantId),
+    isNotNull(menuImports.deletedAt),
+  );
+
+  const [totalRow] = await db
+    .select({ total: count() })
+    .from(menuImports)
+    .where(where);
+  const total = totalRow?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(
+    Math.max(1, Math.floor(options.page ?? 1)),
+    pageCount,
+  );
+
+  if (total === 0) {
+    return { scans: [], total, page, pageCount, pageSize };
+  }
+
   const rows = await db
     .select({
       menuImport: menuImports,
@@ -112,15 +142,10 @@ async function listDeletedScans(
     .from(menuImports)
     .leftJoin(menus, eq(menuImports.menuId, menus.id))
     .leftJoin(users, eq(menuImports.deletedBy, users.id))
-    .where(
-      and(
-        eq(menuImports.restaurantId, restaurantId),
-        isNotNull(menuImports.deletedAt),
-      ),
-    )
-    .orderBy(desc(menuImports.deletedAt));
-
-  if (rows.length === 0) return [];
+    .where(where)
+    .orderBy(desc(menuImports.deletedAt), desc(menuImports.id))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
 
   const importIds = rows.map((row) => row.menuImport.id);
   const [pageCounts, itemCounts] = await Promise.all([
@@ -159,13 +184,14 @@ async function listDeletedScans(
     });
   }
 
-  return scans;
+  return { scans, total, page, pageCount, pageSize };
 }
 
 export async function listDeletedItems(
   db: DbClient,
   actorId: string,
   restaurantId: string,
+  options: { page?: number } = {},
 ) {
   await requireAdminActor(db, actorId);
 
@@ -176,12 +202,16 @@ export async function listDeletedItems(
 
   const [deletedMenus, deletedScans] = await Promise.all([
     listDeletedMenus(db, restaurantId),
-    listDeletedScans(db, restaurantId),
+    listDeletedScans(db, restaurantId, { page: options.page }),
   ]);
 
   return {
     menus: deletedMenus,
-    scans: deletedScans,
+    scans: deletedScans.scans,
+    scanTotal: deletedScans.total,
+    scanPage: deletedScans.page,
+    scanPageCount: deletedScans.pageCount,
+    scanPageSize: deletedScans.pageSize,
     retentionDays: settings.scanRetentionDays,
   };
 }

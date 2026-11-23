@@ -89,6 +89,32 @@ describe("deleted items admin view (ephemeral PGlite)", () => {
     return { admin, editor, restaurant, menu, importRecord: record! };
   }
 
+  async function seedDeletedScans(
+    ctx: Awaited<ReturnType<typeof setup>>,
+    count: number,
+  ) {
+    const base = Date.now() - 60 * 60 * 1000;
+    const rows = await db
+      .insert(menuImports)
+      .values(
+        Array.from({ length: count }, (_, index) => ({
+          restaurantId: ctx.restaurant.id,
+          menuId: ctx.menu.id,
+          uploadedBy: ctx.admin.id,
+          status: "needs_review" as const,
+          deletedAt: new Date(base - index * 60_000),
+          deletedBy: ctx.admin.id,
+        })),
+      )
+      .returning({ id: menuImports.id, deletedAt: menuImports.deletedAt });
+
+    return rows.sort(
+      (left, right) =>
+        right.deletedAt!.getTime() - left.deletedAt!.getTime() ||
+        right.id.localeCompare(left.id),
+    );
+  }
+
   it("lists deleted menus and soft-deleted scans for admins", async () => {
     const { admin, restaurant, menu, importRecord } = await setup();
 
@@ -120,6 +146,88 @@ describe("deleted items admin view (ephemeral PGlite)", () => {
       itemCount: 1,
     });
     expect(data.scans[0]?.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it("paginates deleted scans 15 at a time, newest first", async () => {
+    const ctx = await setup();
+    const seeded = await seedDeletedScans(ctx, 17);
+
+    const firstPage = await listDeletedItems(
+      db,
+      ctx.admin.id,
+      ctx.restaurant.id,
+    );
+
+    expect(firstPage.scanTotal).toBe(17);
+    expect(firstPage.scanPage).toBe(1);
+    expect(firstPage.scanPageCount).toBe(2);
+    expect(firstPage.scanPageSize).toBe(15);
+    expect(firstPage.scans).toHaveLength(15);
+    expect(firstPage.scans.map((scan) => scan.id)).toEqual(
+      seeded.slice(0, 15).map((scan) => scan.id),
+    );
+
+    const secondPage = await listDeletedItems(
+      db,
+      ctx.admin.id,
+      ctx.restaurant.id,
+      { page: 2 },
+    );
+
+    expect(secondPage.scanTotal).toBe(17);
+    expect(secondPage.scanPage).toBe(2);
+    expect(secondPage.scanPageCount).toBe(2);
+    expect(secondPage.scans).toHaveLength(2);
+    expect(secondPage.scans.map((scan) => scan.id)).toEqual(
+      seeded.slice(15).map((scan) => scan.id),
+    );
+
+    const seen = new Set(
+      [...firstPage.scans, ...secondPage.scans].map((scan) => scan.id),
+    );
+    expect(seen.size).toBe(17);
+  });
+
+  it("clamps out-of-range scan pages", async () => {
+    const ctx = await setup();
+    const seeded = await seedDeletedScans(ctx, 17);
+
+    const zero = await listDeletedItems(db, ctx.admin.id, ctx.restaurant.id, {
+      page: 0,
+    });
+    expect(zero.scanPage).toBe(1);
+    expect(zero.scans[0]?.id).toBe(seeded[0]?.id);
+
+    const negative = await listDeletedItems(
+      db,
+      ctx.admin.id,
+      ctx.restaurant.id,
+      { page: -4 },
+    );
+    expect(negative.scanPage).toBe(1);
+    expect(negative.scans).toHaveLength(15);
+
+    const tooHigh = await listDeletedItems(
+      db,
+      ctx.admin.id,
+      ctx.restaurant.id,
+      { page: 99 },
+    );
+    expect(tooHigh.scanPage).toBe(2);
+    expect(tooHigh.scans).toHaveLength(2);
+    expect(tooHigh.scans[1]?.id).toBe(seeded[16]?.id);
+  });
+
+  it("reports an empty scan page when nothing was deleted", async () => {
+    const ctx = await setup();
+
+    const data = await listDeletedItems(db, ctx.admin.id, ctx.restaurant.id);
+
+    expect(data.scanTotal).toBe(0);
+    expect(data.scanPage).toBe(1);
+    expect(data.scanPageCount).toBe(1);
+    expect(data.scans).toEqual([]);
+    expect(data.menus).toEqual([]);
   });
 
   it("does not list archived drafts that were discarded", async () => {

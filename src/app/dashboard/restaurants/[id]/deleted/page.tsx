@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
-import { ArrowRight, BookOpen, ScanLine, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  ScanLine,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -11,6 +18,7 @@ import { Notice } from "@/components/ui/notice";
 import { PageHeader } from "@/components/ui/page-header";
 import { getDb } from "@/db/client";
 import { requireAdminUser } from "@/lib/auth/guards";
+import { cn } from "@/lib/cn";
 import { NotFoundError } from "@/lib/errors";
 import { listDeletedItems } from "@/server/services/deleted-items";
 import { getRestaurantAccess } from "@/server/services/restaurant-access";
@@ -37,6 +45,23 @@ const statusTones: Record<string, BadgeTone> = {
   failed: "danger",
 };
 
+type DeletedTab = "menus" | "scans";
+
+function first(value: string | string[] | undefined): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function tabHref(restaurantId: string, tab: DeletedTab): string {
+  const base = `/dashboard/restaurants/${restaurantId}/deleted`;
+  return tab === "scans" ? `${base}?tab=scans` : base;
+}
+
+function scansPageHref(restaurantId: string, page: number): string {
+  const params = new URLSearchParams({ tab: "scans" });
+  if (page > 1) params.set("page", String(page));
+  return `/dashboard/restaurants/${restaurantId}/deleted?${params.toString()}`;
+}
+
 function dayLabel(days: number): string {
   return `${days} day${days === 1 ? "" : "s"}`;
 }
@@ -47,24 +72,48 @@ function purgeDate(deletedAt: Date, retentionDays: number): Date {
 
 export default async function DeletedItemsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{
+    tab?: string | string[];
+    page?: string | string[];
+  }>;
 }) {
   const admin = await requireAdminUser();
   const { id } = await params;
+  const query = await searchParams;
+  const tab: DeletedTab = first(query.tab) === "scans" ? "scans" : "menus";
+  const pageParam = Number.parseInt(first(query.page), 10);
+  const requestedPage = Number.isFinite(pageParam) ? pageParam : 1;
 
   let restaurant;
   let data;
   try {
     const access = await getRestaurantAccess(getDb(), admin.id, id);
     restaurant = access.restaurant;
-    data = await listDeletedItems(getDb(), admin.id, id);
+    data = await listDeletedItems(getDb(), admin.id, id, {
+      page: requestedPage,
+    });
   } catch (error) {
     if (error instanceof NotFoundError) notFound();
     throw error;
   }
 
   const retentionLabel = dayLabel(data.retentionDays);
+  const firstScan =
+    data.scanTotal === 0 ? 0 : (data.scanPage - 1) * data.scanPageSize + 1;
+  const lastScan = Math.min(
+    data.scanPage * data.scanPageSize,
+    data.scanTotal,
+  );
+  const tabClass = (active: boolean) =>
+    cn(
+      "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+      active
+        ? "bg-surface text-zinc-900 shadow-sm"
+        : "text-zinc-500 hover:text-zinc-800",
+    );
 
   return (
     <div className="space-y-6">
@@ -82,139 +131,204 @@ export default async function DeletedItemsPage({
         never changes menu content.
       </Notice>
 
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-            <BookOpen className="h-4 w-4 text-zinc-400" aria-hidden="true" />
-            Deleted menus
-          </h2>
-          <span className="text-xs text-zinc-500">
-            {data.menus.length} menu{data.menus.length === 1 ? "" : "s"}
+      <nav
+        aria-label="Deleted item types"
+        className="flex w-fit flex-wrap gap-1 rounded-xl border border-zinc-200 bg-zinc-100/70 p-1"
+      >
+        <Link
+          href={tabHref(restaurant.id, "menus")}
+          aria-current={tab === "menus" ? "page" : undefined}
+          className={tabClass(tab === "menus")}
+        >
+          <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
+          Deleted menus
+          <span className="rounded-full bg-zinc-200/80 px-1.5 py-0.5 text-[11px] leading-none text-zinc-600">
+            {data.menus.length}
           </span>
-        </div>
+        </Link>
+        <Link
+          href={tabHref(restaurant.id, "scans")}
+          aria-current={tab === "scans" ? "page" : undefined}
+          className={tabClass(tab === "scans")}
+        >
+          <ScanLine className="h-3.5 w-3.5" aria-hidden="true" />
+          Deleted scans
+          <span className="rounded-full bg-zinc-200/80 px-1.5 py-0.5 text-[11px] leading-none text-zinc-600">
+            {data.scanTotal}
+          </span>
+        </Link>
+      </nav>
 
-        {data.menus.length === 0 ? (
-          <EmptyState
-            icon={<BookOpen className="h-6 w-6" aria-hidden="true" />}
-            title="No deleted menus"
-            description="Menus deleted from this restaurant will appear here with a link to their read-only content and version history."
-          />
-        ) : (
-          <ul className="space-y-3">
-            {data.menus.map((menu) => (
-              <li
-                key={menu.lineageId}
-                className="rounded-2xl border border-zinc-200 bg-surface p-4 shadow-sm"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone="danger">deleted</Badge>
-                      <h3 className="text-sm font-semibold text-zinc-900">
-                        {menu.title}
-                      </h3>
+      {tab === "menus" ? (
+        <section className="space-y-4" aria-label="Deleted menus">
+          {data.menus.length === 0 ? (
+            <EmptyState
+              icon={<BookOpen className="h-6 w-6" aria-hidden="true" />}
+              title="No deleted menus"
+              description="Menus deleted from this restaurant will appear here with a link to their read-only content and version history."
+            />
+          ) : (
+            <ul className="space-y-3">
+              {data.menus.map((menu) => (
+                <li
+                  key={menu.lineageId}
+                  className="rounded-2xl border border-zinc-200 bg-surface p-4 shadow-sm"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone="danger">deleted</Badge>
+                        <h3 className="text-sm font-semibold text-zinc-900">
+                          {menu.title}
+                        </h3>
+                      </div>
+                      <p className="mt-0.5 truncate font-mono text-xs text-zinc-500">
+                        /{menu.slug}
+                      </p>
+                      <p className="mt-2 text-xs leading-5 text-zinc-500">
+                        Deleted {dateFormatter.format(menu.deletedAt)}
+                        {menu.deletedByEmail
+                          ? ` by ${menu.deletedByEmail}`
+                          : ""}{" "}
+                        · {menu.versionCount} version
+                        {menu.versionCount === 1 ? "" : "s"}
+                        {menu.hadPublished ? " · had a published version" : ""}
+                      </p>
                     </div>
-                    <p className="mt-0.5 truncate font-mono text-xs text-zinc-500">
-                      /{menu.slug}
-                    </p>
-                    <p className="mt-2 text-xs leading-5 text-zinc-500">
-                      Deleted {dateFormatter.format(menu.deletedAt)}
-                      {menu.deletedByEmail
-                        ? ` by ${menu.deletedByEmail}`
-                        : ""}{" "}
-                      · {menu.versionCount} version
-                      {menu.versionCount === 1 ? "" : "s"}
-                      {menu.hadPublished ? " · had a published version" : ""}
-                    </p>
+
+                    <Link
+                      href={`/dashboard/restaurants/${restaurant.id}/menus/${menu.menuId}`}
+                      className={buttonClass({ variant: "outline", size: "sm" })}
+                    >
+                      Open read-only menu
+                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Link>
                   </div>
-
-                  <Link
-                    href={`/dashboard/restaurants/${restaurant.id}/menus/${menu.menuId}`}
-                    className={buttonClass({ variant: "outline", size: "sm" })}
-                  >
-                    Open read-only menu
-                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                  </Link>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-            <ScanLine className="h-4 w-4 text-zinc-400" aria-hidden="true" />
-            Deleted scans
-          </h2>
-          <span className="text-xs text-zinc-500">
-            {data.scans.length} scan{data.scans.length === 1 ? "" : "s"}
-          </span>
-        </div>
-
-        {data.scans.length === 0 ? (
-          <EmptyState
-            icon={<ScanLine className="h-6 w-6" aria-hidden="true" />}
-            title="No deleted scans"
-            description="Scans deleted from the scan history will appear here until their retention period ends."
-          />
-        ) : (
-          <ul className="space-y-3">
-            {data.scans.map((scan) => (
-              <li
-                key={scan.id}
-                className="rounded-2xl border border-zinc-200 bg-surface p-4 shadow-sm"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={statusTones[scan.status] ?? "neutral"}>
-                        {scan.status.replaceAll("_", " ")}
-                      </Badge>
-                      <Link
-                        href={`/dashboard/restaurants/${restaurant.id}/deleted/scans/${scan.id}`}
-                        className="text-sm font-medium text-zinc-800 hover:text-accent-strong hover:underline"
-                      >
-                        {scan.menuTitle ?? "Target menu removed"}
-                      </Link>
-                      {scan.menuStatus ? (
-                        <span className="text-xs capitalize text-zinc-400">
-                          ({scan.menuStatus})
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : (
+        <section className="space-y-4" aria-label="Deleted scans">
+          {data.scanTotal === 0 ? (
+            <EmptyState
+              icon={<ScanLine className="h-6 w-6" aria-hidden="true" />}
+              title="No deleted scans"
+              description="Scans deleted from the scan history will appear here until their retention period ends."
+            />
+          ) : (
+            <Card className="overflow-hidden">
+              <ul className="divide-y divide-zinc-100">
+                {data.scans.map((scan) => {
+                  const detailHref = `/dashboard/restaurants/${restaurant.id}/deleted/scans/${scan.id}`;
+                  return (
+                    <li key={scan.id} className="px-5 py-3 sm:px-6">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <Badge tone={statusTones[scan.status] ?? "neutral"}>
+                          {scan.status.replaceAll("_", " ")}
+                        </Badge>
+                        <Link
+                          href={detailHref}
+                          className="min-w-0 truncate text-sm font-medium text-zinc-800 hover:text-accent-strong hover:underline"
+                        >
+                          {scan.menuTitle ?? "Target menu removed"}
+                        </Link>
+                        {scan.menuStatus ? (
+                          <span className="text-xs capitalize text-zinc-400">
+                            {scan.menuStatus}
+                          </span>
+                        ) : null}
+                        <span className="text-xs text-zinc-500">
+                          Deleted {dateFormatter.format(scan.deletedAt)}
                         </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-2 text-xs leading-5 text-zinc-500">
-                      Deleted {dateFormatter.format(scan.deletedAt)}
-                      {scan.deletedByEmail
-                        ? ` by ${scan.deletedByEmail}`
-                        : ""}{" "}
-                      · {scan.pageCount} page
-                      {scan.pageCount === 1 ? "" : "s"} · {scan.itemCount}{" "}
-                      extracted item{scan.itemCount === 1 ? "" : "s"}
-                    </p>
-                    <p className="mt-0.5 text-xs text-zinc-400">
-                      Uploaded {dateFormatter.format(scan.createdAt)} ·
-                      Permanently removed after{" "}
-                      {dateFormatter.format(
-                        purgeDate(scan.deletedAt, data.retentionDays),
-                      )}
-                    </p>
-                  </div>
+                        <span className="text-xs text-zinc-500">
+                          {scan.pageCount} page
+                          {scan.pageCount === 1 ? "" : "s"} · {scan.itemCount}{" "}
+                          item{scan.itemCount === 1 ? "" : "s"}
+                        </span>
+                        <Link
+                          href={detailHref}
+                          aria-label={`View scan of ${scan.menuTitle ?? "removed menu"}`}
+                          className={buttonClass({
+                            variant: "outline",
+                            size: "sm",
+                            className: "ml-auto",
+                          })}
+                        >
+                          View
+                          <ArrowRight
+                            className="h-3.5 w-3.5"
+                            aria-hidden="true"
+                          />
+                        </Link>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-5 text-zinc-400">
+                        {scan.deletedByEmail
+                          ? `Deleted by ${scan.deletedByEmail} · `
+                          : ""}
+                        Uploaded {dateFormatter.format(scan.createdAt)} ·
+                        Permanently removed after{" "}
+                        {dateFormatter.format(
+                          purgeDate(scan.deletedAt, data.retentionDays),
+                        )}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ul>
 
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200 px-5 py-3 sm:px-6">
+                {data.scanPage > 1 ? (
                   <Link
-                    href={`/dashboard/restaurants/${restaurant.id}/deleted/scans/${scan.id}`}
+                    href={scansPageHref(restaurant.id, data.scanPage - 1)}
                     className={buttonClass({ variant: "outline", size: "sm" })}
                   >
-                    View scan
-                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                    Newer
                   </Link>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                ) : (
+                  <span
+                    className={buttonClass({
+                      variant: "outline",
+                      size: "sm",
+                      className: "pointer-events-none opacity-40",
+                    })}
+                    aria-disabled="true"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                    Newer
+                  </span>
+                )}
+                <span className="text-xs text-zinc-500">
+                  Showing {firstScan}–{lastScan} of {data.scanTotal}
+                </span>
+                {data.scanPage < data.scanPageCount ? (
+                  <Link
+                    href={scansPageHref(restaurant.id, data.scanPage + 1)}
+                    className={buttonClass({ variant: "outline", size: "sm" })}
+                  >
+                    Older
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Link>
+                ) : (
+                  <span
+                    className={buttonClass({
+                      variant: "outline",
+                      size: "sm",
+                      className: "pointer-events-none opacity-40",
+                    })}
+                    aria-disabled="true"
+                  >
+                    Older
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                )}
+              </div>
+            </Card>
+          )}
+        </section>
+      )}
 
       <Card>
         <CardHeader
