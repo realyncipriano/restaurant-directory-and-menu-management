@@ -49,10 +49,10 @@ export default async function Home({
 
   return (
     <SiteShell>
-      <section className="border-b border-zinc-200 bg-[#f4efe5]">
+      <section className="border-b border-zinc-200 bg-surface-muted">
         <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
           <div className="max-w-3xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
               Restaurant directory
             </p>
             <h1 className="mt-3 max-w-2xl font-serif text-4xl font-medium leading-[1.08] tracking-tight text-zinc-900 sm:text-5xl">
@@ -67,7 +67,7 @@ export default async function Home({
           <form
             action="/"
             method="get"
-            className="mt-8 grid gap-3 rounded-xl border border-zinc-200 bg-white/80 p-3 shadow-sm sm:grid-cols-[1fr_14rem_auto]"
+            className="mt-8 grid gap-3 rounded-xl border border-zinc-200 bg-surface/80 p-3 shadow-sm sm:grid-cols-[1fr_14rem_auto]"
           >
             <div className="relative">
               <Search
@@ -83,7 +83,7 @@ export default async function Home({
                 type="search"
                 defaultValue={search}
                 placeholder="Search by name, cuisine, or area"
-                className="block w-full rounded-lg border border-zinc-300 bg-white py-2.5 pl-10 pr-3 text-sm text-zinc-900 shadow-sm outline-none placeholder:text-zinc-400 focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20"
+                className="block w-full rounded-lg border border-zinc-300 bg-surface py-2.5 pl-10 pr-3 text-sm text-zinc-900 shadow-sm outline-none placeholder:text-zinc-400 focus:border-accent focus:ring-2 focus:ring-accent/20"
               />
             </div>
 
@@ -95,7 +95,7 @@ export default async function Home({
                 id="cuisine"
                 name="cuisine"
                 defaultValue={cuisine}
-                className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20"
+                className="block w-full rounded-lg border border-zinc-300 bg-surface px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
               >
                 <option value="">All cuisines</option>
                 {cuisines.map((option) => (
@@ -108,7 +108,7 @@ export default async function Home({
 
             <button
               type="submit"
-              className="rounded-lg bg-amber-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-800"
+              className="rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-accent-contrast transition hover:bg-accent-strong"
             >
               Search
             </button>
@@ -119,7 +119,7 @@ export default async function Home({
               {restaurants.length} result{restaurants.length === 1 ? "" : "s"}
               {search ? ` for “${search}”` : ""}
               {cuisine ? ` in ${cuisine}` : ""}.{" "}
-              <Link href="/" className="font-medium text-amber-700 hover:underline">
+              <Link href="/" className="font-medium text-accent hover:underline">
                 Clear filters
               </Link>
             </p>
@@ -134,8 +134,8 @@ export default async function Home({
 
       <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
         {restaurants.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center">
-            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
+          <div className="rounded-2xl border border-dashed border-zinc-300 bg-surface px-6 py-16 text-center">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-accent-subtle text-accent">
               <Store className="h-6 w-6" aria-hidden="true" />
             </span>
             <h2 className="mt-4 text-base font-semibold text-zinc-900">
@@ -149,7 +149,7 @@ export default async function Home({
             {hasFilters ? (
               <Link
                 href="/"
-                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800"
+                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-zinc-50 hover:bg-zinc-800"
               >
                 Clear filters
               </Link>
@@ -164,7 +164,7 @@ export default async function Home({
                 <Link
                   key={restaurant.id}
                   href={`/restaurants/${restaurant.slug}`}
-                  className="group flex flex-col overflow-hidden rounded-xl border border-zinc-200/90 bg-white transition hover:border-amber-300 hover:shadow-md"
+                  className="group flex flex-col overflow-hidden rounded-xl border border-zinc-200/90 bg-surface transition hover:border-amber-300 hover:shadow-md"
                 >
                   {coverUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -177,11 +177,11 @@ export default async function Home({
                   ) : null}
                   <div className="flex flex-1 flex-col p-5">
                     <div className="flex items-start justify-between gap-3">
-                      <h2 className="font-serif text-xl font-medium leading-snug text-zinc-900 group-hover:text-amber-800">
+                      <h2 className="font-serif text-xl font-medium leading-snug text-zinc-900 group-hover:text-accent">
                         {restaurant.name}
                       </h2>
                       <UtensilsCrossed
-                        className="mt-1 h-4 w-4 shrink-0 text-amber-700"
+                        className="mt-1 h-4 w-4 shrink-0 text-accent"
                         aria-hidden="true"
                       />
                     </div>
@@ -212,7 +212,7 @@ export default async function Home({
                           ? "Menu coming soon"
                           : `${publishedMenuCount} published menu${publishedMenuCount === 1 ? "" : "s"}`}
                       </span>
-                      <span className="inline-flex items-center gap-1 font-medium text-amber-700">
+                      <span className="inline-flex items-center gap-1 font-medium text-accent">
                         View
                         <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                       </span>

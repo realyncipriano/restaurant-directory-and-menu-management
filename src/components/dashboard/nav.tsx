@@ -59,8 +59,8 @@ function NavGroup({
             className={cn(
               "inline-flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition",
               active
-                ? "bg-white text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-200/80"
-                : "text-zinc-600 hover:bg-white/70 hover:text-zinc-900",
+                ? "bg-surface text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-200/80"
+                : "text-zinc-600 hover:bg-surface/70 hover:text-zinc-900",
             )}
           >
             <Icon className="h-4 w-4" aria-hidden="true" />

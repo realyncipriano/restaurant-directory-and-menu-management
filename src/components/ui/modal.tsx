@@ -16,9 +16,9 @@ const focusableSelector = [
 ].join(",");
 
 const toneClasses = {
-  default: "bg-amber-50 text-amber-700",
-  success: "bg-emerald-50 text-emerald-700",
-  danger: "bg-red-50 text-red-600",
+  default: "bg-accent-subtle text-accent",
+  success: "bg-emerald-50 text-emerald-700 dark:text-emerald-400",
+  danger: "bg-red-50 text-red-600 dark:text-red-400",
 } as const;
 
 export function Modal({
@@ -114,7 +114,7 @@ export function Modal({
         tabIndex={-1}
         aria-label="Close dialog"
         onClick={() => onCloseRef.current()}
-        className="absolute inset-0 animate-[modal-backdrop-in_150ms_ease-out] bg-zinc-950/50 backdrop-blur-sm"
+        className="absolute inset-0 animate-[modal-backdrop-in_150ms_ease-out] bg-black/50 backdrop-blur-sm"
       />
       <div
         ref={panelRef}
@@ -124,7 +124,7 @@ export function Modal({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          "relative w-full max-w-md animate-[modal-panel-in_180ms_ease-out] rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl outline-none sm:p-6",
+          "relative w-full max-w-md animate-[modal-panel-in_180ms_ease-out] rounded-2xl border border-zinc-200 bg-surface p-5 shadow-2xl outline-none sm:p-6",
           className,
         )}
       >

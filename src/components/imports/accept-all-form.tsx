@@ -18,7 +18,7 @@ function AcceptAllButton({ disabled }: { disabled: boolean }) {
         variant: "outline",
         size: "sm",
         className:
-          "w-full border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
+          "w-full border-emerald-300 bg-emerald-50 text-emerald-800 dark:text-emerald-400 hover:bg-emerald-100",
       })}
     >
       {pending ? (

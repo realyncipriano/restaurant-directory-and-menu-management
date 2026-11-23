@@ -156,7 +156,7 @@ export default async function MenuImportsPage({
                 return (
                   <li
                     key={menuImport.id}
-                    className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-amber-300 hover:shadow-md"
+                    className="rounded-2xl border border-zinc-200 bg-surface p-4 shadow-sm transition hover:border-amber-300 hover:shadow-md"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
@@ -168,7 +168,7 @@ export default async function MenuImportsPage({
                           </Badge>
                           <Link
                             href={`/dashboard/restaurants/${restaurant.id}/imports/${menuImport.id}`}
-                            className="text-sm font-medium text-zinc-800 hover:text-amber-800 hover:underline"
+                            className="text-sm font-medium text-zinc-800 hover:text-accent-strong hover:underline"
                           >
                             {menuTitle ?? "Draft menu removed"}
                           </Link>
@@ -179,7 +179,7 @@ export default async function MenuImportsPage({
                           ) : null}
                         </div>
                         {errorMessage ? (
-                          <p className="mt-2 text-xs text-red-600">
+                          <p className="mt-2 text-xs text-red-600 dark:text-red-400">
                             {errorMessage}
                           </p>
                         ) : (
@@ -190,7 +190,7 @@ export default async function MenuImportsPage({
                         )}
                         <Link
                           href={`/dashboard/restaurants/${restaurant.id}/imports/${menuImport.id}`}
-                          className="mt-1 inline-block text-xs font-medium text-amber-800 hover:underline"
+                          className="mt-1 inline-block text-xs font-medium text-accent hover:underline"
                         >
                           Open scan
                         </Link>
@@ -234,7 +234,7 @@ export default async function MenuImportsPage({
 
         <Card className="h-fit">
           <CardHeader
-            icon={<ScanLine className="h-4 w-4 text-amber-700" aria-hidden="true" />}
+            icon={<ScanLine className="h-4 w-4 text-accent" aria-hidden="true" />}
             title="New scan"
             description={`Choose up to ${maxPages} page images. The draft menu is selected before upload.`}
           />

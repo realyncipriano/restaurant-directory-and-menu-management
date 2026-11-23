@@ -48,7 +48,7 @@ export function MenuItemCard({
   imageStorageConfigured: boolean;
 }) {
   return (
-    <details className="group rounded-xl border border-zinc-200 bg-zinc-50/40 transition open:bg-white">
+    <details className="group rounded-xl border border-zinc-200 bg-zinc-50/40 transition open:bg-surface">
       <summary className="flex cursor-pointer list-none items-start justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0">
           <p className="text-sm font-medium text-zinc-900">{item.name}</p>

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions";
 import { DashboardNav } from "@/components/dashboard/nav";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { requireCurrentUser } from "@/lib/auth/guards";
 import { getRequestAppSettings } from "@/server/services/app-settings-request";
 
@@ -25,7 +26,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <header className="sticky top-0 z-30 border-b border-zinc-200/80 bg-white/90 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-zinc-200/80 bg-surface/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
           <div className="flex items-center justify-between gap-4">
             <Link href="/dashboard" className="flex items-center gap-2.5">
@@ -45,7 +46,7 @@ export default async function DashboardLayout({
             <form action={logoutAction} className="lg:hidden">
               <button
                 type="submit"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-600 shadow-sm transition hover:bg-zinc-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-surface px-3 py-2 text-xs font-medium text-zinc-600 shadow-sm transition hover:bg-zinc-50"
               >
                 <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
                 Sign out
@@ -57,6 +58,7 @@ export default async function DashboardLayout({
             <DashboardNav isAdmin={user.role === "admin"} />
 
             <div className="flex items-center gap-3 border-t border-zinc-100 pt-3 sm:border-0 sm:pt-0">
+              <ThemeToggle />
               <div className="hidden text-right sm:block">
                 <p className="text-sm font-medium text-zinc-900">{user.name}</p>
                 <p className="text-xs text-zinc-500">
@@ -65,14 +67,14 @@ export default async function DashboardLayout({
               </div>
               <span
                 aria-hidden="true"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold text-white ring-2 ring-white"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold text-zinc-50 ring-2 ring-surface"
               >
                 {initials || "?"}
               </span>
               <form action={logoutAction} className="hidden lg:block">
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-600 shadow-sm transition hover:bg-zinc-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-surface px-3 py-2 text-xs font-medium text-zinc-600 shadow-sm transition hover:bg-zinc-50"
                 >
                   <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
                   Sign out

@@ -10,19 +10,19 @@ const toneConfig: Record<
   { className: string; icon: typeof Info }
 > = {
   success: {
-    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:text-emerald-400",
     icon: CheckCircle2,
   },
   error: {
-    className: "border-red-200 bg-red-50 text-red-700",
+    className: "border-red-200 bg-red-50 text-red-700 dark:text-red-400",
     icon: XCircle,
   },
   warning: {
-    className: "border-amber-200 bg-amber-50 text-amber-900",
+    className: "border-accent-border bg-accent-subtle text-accent",
     icon: AlertTriangle,
   },
   info: {
-    className: "border-sky-200 bg-sky-50 text-sky-900",
+    className: "border-sky-200 bg-sky-50 text-sky-900 dark:text-sky-400",
     icon: Info,
   },
 };

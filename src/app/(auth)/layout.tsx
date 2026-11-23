@@ -2,12 +2,14 @@ import { Cat } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+
 export const instant = false;
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50">
-      <header className="px-6 py-5 sm:px-8">
+      <header className="flex items-center justify-between px-6 py-5 sm:px-8">
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-900"
@@ -17,11 +19,12 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           </span>
           Menu Directory
         </Link>
+        <ThemeToggle />
       </header>
 
       <main className="flex flex-1 items-center justify-center px-6 pb-20">
         <div className="w-full max-w-md">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-7 shadow-sm sm:p-8">
+          <div className="rounded-2xl border border-zinc-200 bg-surface p-7 shadow-sm sm:p-8">
             {children}
           </div>
           <p className="mt-6 text-center text-xs text-zinc-500">

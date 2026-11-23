@@ -74,7 +74,7 @@ export function PublishMenuForm({
         {state.error ? (
           <Notice tone="error">{state.error}</Notice>
         ) : (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-3.5 py-3 text-xs leading-5 text-emerald-900">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-3.5 py-3 text-xs leading-5 text-emerald-900 dark:text-emerald-400">
             Check that prices and availability are current before publishing.
             You can create another draft afterward without unpublishing.
           </div>

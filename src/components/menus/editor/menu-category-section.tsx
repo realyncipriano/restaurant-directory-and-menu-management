@@ -38,7 +38,7 @@ export function MenuCategorySection({
     <details
       id={`category-${category.id}`}
       open={open}
-      className="group scroll-mt-6 overflow-hidden rounded-xl border border-zinc-200/90 bg-white shadow-[0_1px_2px_rgba(42,34,25,0.04)] lg:scroll-mt-28"
+      className="group scroll-mt-6 overflow-hidden rounded-xl border border-zinc-200/90 bg-surface shadow-[0_1px_2px_rgba(42,34,25,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] lg:scroll-mt-28"
     >
       <summary className="flex cursor-pointer list-none flex-col gap-2 px-5 py-4 [&::-webkit-details-marker]:hidden sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
@@ -95,8 +95,8 @@ export function MenuCategorySection({
           ))}
 
           {canEdit ? (
-            <details className="rounded-xl border border-dashed border-zinc-300 bg-white">
-              <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-medium text-amber-700 [&::-webkit-details-marker]:hidden">
+            <details className="rounded-xl border border-dashed border-zinc-300 bg-surface">
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-medium text-accent [&::-webkit-details-marker]:hidden">
                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                 Add item to {category.name}
               </summary>

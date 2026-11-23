@@ -51,7 +51,7 @@ export function MenuHistoryCards({
                   className={
                     version.id === currentMenuId
                       ? "font-semibold text-zinc-900"
-                      : "text-zinc-600 hover:text-amber-800"
+                      : "text-zinc-600 hover:text-accent"
                   }
                 >
                   Version {version.version}

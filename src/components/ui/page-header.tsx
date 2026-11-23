@@ -41,7 +41,7 @@ export function PageHeader({
           </Link>
         ) : null}
         {eyebrow ? (
-          <p className={cn("text-sm font-medium text-amber-700", backHref && "mt-3")}>
+          <p className={cn("text-sm font-medium text-accent", backHref && "mt-3")}>
             {eyebrow}
           </p>
         ) : null}
@@ -52,7 +52,7 @@ export function PageHeader({
           )}
         >
           {icon ? (
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/10">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle text-accent ring-1 ring-inset ring-accent/15">
               {icon}
             </span>
           ) : null}

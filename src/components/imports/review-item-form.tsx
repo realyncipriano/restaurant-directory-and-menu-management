@@ -43,7 +43,7 @@ export function ImportItemReviewForm({
       ? "border-emerald-300 bg-emerald-50/50"
       : item.decision === "reject"
         ? "border-zinc-200 bg-zinc-50 opacity-70"
-        : "border-zinc-200 bg-white";
+        : "border-zinc-200 bg-surface";
 
   return (
     <form

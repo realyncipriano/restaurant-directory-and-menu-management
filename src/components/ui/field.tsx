@@ -65,7 +65,7 @@ export function Field({
           {typeof children === "function" ? children(control) : children}
         </div>
         {error ? (
-          <p id={errorId} className="mt-1.5 text-xs font-medium text-red-600">
+          <p id={errorId} className="mt-1.5 text-xs font-medium text-red-600 dark:text-red-400">
             {error}
           </p>
         ) : null}
@@ -90,5 +90,5 @@ export function Field({
 
 export function FieldError({ message }: { message?: string[] }) {
   if (!message?.length) return null;
-  return <p className="mt-1.5 text-xs font-medium text-red-600">{message[0]}</p>;
+  return <p className="mt-1.5 text-xs font-medium text-red-600 dark:text-red-400">{message[0]}</p>;
 }

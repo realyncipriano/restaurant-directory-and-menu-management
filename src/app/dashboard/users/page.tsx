@@ -148,7 +148,7 @@ export default async function UsersPage({
 
       <Card>
         <CardHeader
-          icon={<UserPlus className="h-4 w-4 text-amber-700" aria-hidden="true" />}
+          icon={<UserPlus className="h-4 w-4 text-accent" aria-hidden="true" />}
           title="Invite a team member"
           description="The invitation link is shown once and expires in seven days."
         />

@@ -14,21 +14,21 @@ export type ButtonVariant =
 export type ButtonSize = "sm" | "md" | "lg";
 
 const baseClass =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-amber-700 text-white shadow-sm hover:bg-amber-800 focus-visible:ring-offset-white",
+    "bg-accent text-accent-contrast shadow-sm hover:bg-accent-strong focus-visible:ring-offset-background",
   secondary:
-    "bg-zinc-900 text-white shadow-sm hover:bg-zinc-800 focus-visible:ring-zinc-900/30 focus-visible:ring-offset-white",
+    "bg-zinc-900 text-zinc-50 shadow-sm hover:bg-zinc-800 focus-visible:ring-zinc-900/30 focus-visible:ring-offset-background",
   outline:
-    "border border-zinc-300 bg-white text-zinc-700 shadow-sm hover:border-zinc-400 hover:bg-zinc-50",
+    "border border-zinc-300 bg-surface text-zinc-700 shadow-sm hover:border-zinc-400 hover:bg-zinc-50",
   ghost:
     "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900",
   danger:
-    "border border-red-200 bg-white text-red-700 shadow-sm hover:border-red-300 hover:bg-red-50",
+    "border border-red-200 bg-surface text-red-700 dark:text-red-400 shadow-sm hover:border-red-300 hover:bg-red-50",
   success:
-    "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 focus-visible:ring-emerald-600/40 focus-visible:ring-offset-white",
+    "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800 focus-visible:ring-emerald-700/40 focus-visible:ring-offset-background",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

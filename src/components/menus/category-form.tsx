@@ -134,7 +134,7 @@ export function CategoryForm({
           <input type="hidden" name="categoryId" value={category.id} />
           <ConfirmButton
             message={`Delete “${category.name}” and all of its items from this draft?`}
-            className="text-xs font-medium text-red-600 hover:text-red-700"
+            className="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400"
           >
             Delete category
           </ConfirmButton>

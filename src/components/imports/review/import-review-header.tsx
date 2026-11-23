@@ -43,7 +43,7 @@ export function ImportReviewHeader({
           Target draft:{" "}
           <Link
             href={`/dashboard/restaurants/${restaurantId}/menus/${menuId}`}
-            className="font-medium text-amber-800 hover:underline"
+            className="font-medium text-accent hover:underline"
           >
             {menuTitle} v{menuVersion}
           </Link>{" "}

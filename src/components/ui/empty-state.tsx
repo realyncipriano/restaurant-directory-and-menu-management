@@ -18,12 +18,12 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center",
+        "rounded-2xl border border-dashed border-zinc-300 bg-surface px-6 py-12 text-center",
         className,
       )}
     >
       {icon ? (
-        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/10">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-accent-subtle text-accent ring-1 ring-inset ring-accent/15">
           {icon}
         </span>
       ) : null}

@@ -108,7 +108,7 @@ export function ImageUploadForm({
               ))}
               <ConfirmButton
                 message={`${removeLabel}? This cannot be undone.`}
-                className="text-xs font-medium text-red-600 hover:text-red-700"
+                className="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400"
               >
                 {removeLabel}
               </ConfirmButton>

@@ -228,7 +228,7 @@ export function StartImportForm({
         <p
           className={
             tooMany
-              ? "text-xs font-medium text-red-600"
+              ? "text-xs font-medium text-red-600 dark:text-red-400"
               : "text-xs text-zinc-500"
           }
         >
@@ -249,7 +249,7 @@ export function StartImportForm({
         <div
           role="status"
           aria-live="polite"
-          className="rounded-xl border border-sky-200 bg-sky-50 px-3.5 py-3 text-sm text-sky-900"
+          className="rounded-xl border border-sky-200 bg-sky-50 px-3.5 py-3 text-sm text-sky-900 dark:text-sky-400"
         >
           <div className="flex items-center gap-2">
             <Spinner className="h-4 w-4 shrink-0" />
@@ -278,7 +278,7 @@ export function StartImportForm({
                   style={{ width: `${overallPercent}%` }}
                 />
               </div>
-              <p className="mt-1 text-xs text-sky-700">
+              <p className="mt-1 text-xs text-sky-700 dark:text-sky-400">
                 {overallPercent}% uploaded
               </p>
             </>

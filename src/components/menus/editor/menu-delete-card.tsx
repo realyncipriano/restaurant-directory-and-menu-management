@@ -19,11 +19,11 @@ export function MenuDeleteCard({
   return (
     <Card className="border-red-300 bg-red-50/60">
       <CardBody>
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-red-900">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-red-900 dark:text-red-400">
           <Trash2 className="h-4 w-4" aria-hidden="true" />
           Delete menu
         </h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-red-900/80">
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-red-900 dark:text-red-400/80">
           {hasPublishedVersion
             ? `Deletes the live menu “${menuTitle}” and every version in its history. Guests will no longer see it. The data stays archived and cannot be restored from the app.`
             : `Deletes “${menuTitle}” and every version in its history. It will be removed from the menus list. The data stays archived and cannot be restored from the app.`}

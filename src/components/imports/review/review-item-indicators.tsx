@@ -46,7 +46,7 @@ export function ReviewItemIndicators({ item }: { item: ReviewItem }) {
           </p>
           <p className="mt-0.5 text-xs text-zinc-500">
             {item.categoryName}
-            <span className="text-zinc-300"> · </span>
+            <span className="text-zinc-300 dark:text-zinc-500"> · </span>
             {formatReviewItemPrice(item)}
           </p>
         </div>

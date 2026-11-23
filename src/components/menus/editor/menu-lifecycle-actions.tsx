@@ -22,11 +22,11 @@ export function MenuLifecycleActions({
       {canPublish ? (
         <Card className="border-emerald-200 bg-emerald-50/50">
           <CardBody>
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-emerald-900">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-emerald-900 dark:text-emerald-400">
               <Send className="h-4 w-4" aria-hidden="true" />
               Publish this draft
             </h2>
-            <p className="mt-2 text-sm leading-6 text-emerald-900/80">
+            <p className="mt-2 text-sm leading-6 text-emerald-900 dark:text-emerald-400/80">
               Publishing validates prices, archives the current published
               version, and makes this draft live.
             </p>
@@ -43,11 +43,11 @@ export function MenuLifecycleActions({
       {canEdit ? (
         <Card className="border-red-200 bg-red-50/40">
           <CardBody>
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-red-900">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-red-900 dark:text-red-400">
               <Trash2 className="h-4 w-4" aria-hidden="true" />
               Discard draft
             </h2>
-            <p className="mt-2 text-sm leading-6 text-red-900/80">
+            <p className="mt-2 text-sm leading-6 text-red-900 dark:text-red-400/80">
               Removes this draft without changing the published menu. The
               draft stays in version history as archived.
             </p>

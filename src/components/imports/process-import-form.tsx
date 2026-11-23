@@ -55,14 +55,14 @@ export function ProcessImportForm({
         <div
           role="status"
           aria-live="polite"
-          className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs leading-5 text-sky-900"
+          className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs leading-5 text-sky-900 dark:text-sky-400"
         >
           <p className="flex items-center gap-2 font-medium">
             <Spinner className="h-3.5 w-3.5 shrink-0" />
             Scanning menu images with AI
             {elapsedSeconds > 0 ? ` — ${elapsedSeconds}s elapsed` : "..."}
           </p>
-          <p className="mt-1 text-sky-700">
+          <p className="mt-1 text-sky-700 dark:text-sky-400">
             This can take up to 3 minutes. Keep this page open.
           </p>
         </div>

@@ -39,7 +39,7 @@ export default async function ActivatePage({
         </div>
         <Link
           href="/login"
-          className="mt-6 inline-block text-sm font-medium text-amber-700 hover:text-amber-800"
+          className="mt-6 inline-block text-sm font-medium text-accent hover:text-accent-strong"
         >
           Go to sign in
         </Link>

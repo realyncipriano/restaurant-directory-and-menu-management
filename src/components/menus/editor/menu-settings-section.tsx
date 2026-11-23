@@ -16,7 +16,7 @@ export function MenuSettingsSection({
   description: string | null;
 }) {
   return (
-    <details className="group rounded-2xl border border-zinc-200 bg-white shadow-sm">
+    <details className="group rounded-2xl border border-zinc-200 bg-surface shadow-sm">
       <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-4 text-sm font-semibold text-zinc-900 [&::-webkit-details-marker]:hidden">
         <ChevronDown
           className="h-4 w-4 text-zinc-400 transition group-open:rotate-180"

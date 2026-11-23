@@ -57,7 +57,7 @@ export function ImportReviewSidebar({
                 key={stat.label}
                 className={
                   stat.highlight
-                    ? "rounded-xl border border-amber-200 bg-amber-50 px-3 py-2"
+                    ? "rounded-xl border border-accent-border bg-accent-subtle px-3 py-2"
                     : "rounded-xl border border-zinc-200 bg-zinc-50/60 px-3 py-2"
                 }
               >
@@ -65,7 +65,7 @@ export function ImportReviewSidebar({
                 <dd
                   className={
                     stat.highlight
-                      ? "text-lg font-semibold text-amber-800"
+                      ? "text-lg font-semibold text-accent"
                       : "text-lg font-semibold text-zinc-900"
                   }
                 >

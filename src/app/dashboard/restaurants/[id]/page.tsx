@@ -229,7 +229,7 @@ export default async function RestaurantDetailPage({
               <CardSectionTitle
                 icon={
                   <UtensilsCrossed
-                    className="h-4 w-4 text-amber-700"
+                    className="h-4 w-4 text-accent"
                     aria-hidden="true"
                   />
                 }
@@ -332,7 +332,7 @@ export default async function RestaurantDetailPage({
                     <span
                       className={
                         permission.granted
-                          ? "flex h-5 w-5 items-center justify-center rounded-full bg-emerald-50 text-emerald-700"
+                          ? "flex h-5 w-5 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 dark:text-emerald-400"
                           : "flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-zinc-400"
                       }
                     >
@@ -366,7 +366,7 @@ export default async function RestaurantDetailPage({
                 </p>
                 <Link
                   href={`/dashboard/restaurants/${restaurant.id}/access`}
-                  className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-amber-700 hover:text-amber-800"
+                  className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-accent hover:text-accent-strong"
                 >
                   Manage access
                   <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />

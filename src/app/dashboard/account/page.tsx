@@ -87,7 +87,7 @@ export default async function AccountPage({
       <Card className="border-red-200 bg-red-50/30">
         <CardBody>
           <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-            <ShieldCheck className="h-4 w-4 text-red-600" aria-hidden="true" />
+            <ShieldCheck className="h-4 w-4 text-red-600 dark:text-red-400" aria-hidden="true" />
             All sessions
           </h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-600">

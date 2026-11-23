@@ -56,11 +56,11 @@ function QuickLinkCard({ link }: { link: QuickLink }) {
   return (
     <Link
       href={link.href}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md"
+      className="group relative flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md"
     >
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-amber-50 opacity-0 transition group-hover:opacity-100"
+        className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-accent-subtle opacity-0 transition group-hover:opacity-100"
       />
       <span
         className={
@@ -73,7 +73,7 @@ function QuickLinkCard({ link }: { link: QuickLink }) {
       </span>
       <h2 className="relative mt-4 flex items-center gap-1 text-sm font-semibold text-zinc-900">
         {link.title}
-        <ArrowRight className="h-4 w-4 text-zinc-400 transition group-hover:translate-x-0.5 group-hover:text-amber-700" />
+        <ArrowRight className="h-4 w-4 text-zinc-400 transition group-hover:translate-x-0.5 group-hover:text-accent" />
       </h2>
       <p className="relative mt-1 text-sm leading-6 text-zinc-600">
         {link.description}
@@ -153,7 +153,7 @@ export default async function DashboardPage() {
                 const Icon = rule.icon;
                 return (
                   <li key={rule.title} className="flex gap-3">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-subtle text-accent">
                       <Icon className="h-4 w-4" aria-hidden="true" />
                     </span>
                     <div>
@@ -171,9 +171,9 @@ export default async function DashboardPage() {
           </CardBody>
         </Card>
 
-        <Card className="border-amber-200 bg-linear-to-br from-amber-50 to-white">
+        <Card className="border-accent-border bg-linear-to-br from-accent-subtle to-surface">
           <CardBody>
-            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+            <p className="text-xs font-semibold uppercase tracking-wide text-accent">
               Tip
             </p>
             <h2 className="mt-2 text-sm font-semibold text-zinc-900">
@@ -185,7 +185,7 @@ export default async function DashboardPage() {
             </p>
             <Link
               href="/dashboard/restaurants"
-              className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-amber-800 hover:text-amber-900"
+              className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:text-accent-strong"
             >
               Open restaurants
               <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />

@@ -68,14 +68,14 @@ export function ModifiersEditor({
                   onChange={(event) =>
                     onUpdate(index, { isAvailable: event.target.checked })
                   }
-                  className="h-4 w-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-600/40"
+                  className="h-4 w-4 rounded border-zinc-300 text-accent focus:ring-accent/40"
                 />
                 Available
               </label>
               <button
                 type="button"
                 onClick={() => onRemove(index)}
-                className="col-start-2 row-start-1 flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-red-50 hover:text-red-600 sm:col-start-auto sm:row-start-auto"
+                className="col-start-2 row-start-1 flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400 sm:col-start-auto sm:row-start-auto"
                 aria-label={`Remove add-on ${index + 1}`}
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />

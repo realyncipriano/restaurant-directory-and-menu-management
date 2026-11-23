@@ -35,7 +35,7 @@ export function CopyButton({
       })}
     >
       {copied ? (
-        <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+        <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
       ) : (
         <Copy className="h-3.5 w-3.5" aria-hidden="true" />
       )}

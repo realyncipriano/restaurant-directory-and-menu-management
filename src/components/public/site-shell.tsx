@@ -2,6 +2,7 @@ import { Cat } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { getRequestAppSettings } from "@/server/services/app-settings-request";
 
 export async function SiteShell({ children }: { children: ReactNode }) {
@@ -31,9 +32,10 @@ export async function SiteShell({ children }: { children: ReactNode }) {
             >
               Browse restaurants
             </Link>
+            <ThemeToggle />
             <Link
               href="/login"
-              className="rounded-lg border border-zinc-300 bg-white/70 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-400 hover:bg-white"
+              className="rounded-lg border border-zinc-300 bg-surface/70 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-400 hover:bg-surface"
             >
               Sign in
             </Link>
@@ -54,7 +56,7 @@ export async function SiteShell({ children }: { children: ReactNode }) {
                 {" "}
                 <a
                   href={`mailto:${settings.supportEmail}`}
-                  className="font-medium text-amber-800 hover:underline"
+                  className="font-medium text-accent hover:underline"
                 >
                   Contact support
                 </a>

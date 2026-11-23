@@ -28,7 +28,7 @@ export function ResetLinkForm({ userId }: { userId: string }) {
         </button>
       </form>
       {state.error ? (
-        <p className="max-w-xs text-xs text-red-600">{state.error}</p>
+        <p className="max-w-xs text-xs text-red-600 dark:text-red-400">{state.error}</p>
       ) : null}
       {state.inviteUrl ? (
         <div className="space-y-2">

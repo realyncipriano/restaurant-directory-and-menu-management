@@ -70,17 +70,17 @@ export function InviteForm() {
 
       {state.inviteUrl ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-          <p className="text-sm font-medium text-emerald-900">
+          <p className="text-sm font-medium text-emerald-900 dark:text-emerald-400">
             {state.success}
             {state.inviteEmail ? ` (${state.inviteEmail})` : ""}
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <code className="min-w-0 flex-1 overflow-x-auto rounded-lg bg-white px-3 py-2 text-xs text-zinc-700">
+            <code className="min-w-0 flex-1 overflow-x-auto rounded-lg bg-surface px-3 py-2 text-xs text-zinc-700">
               {state.inviteUrl}
             </code>
             <CopyButton value={state.inviteUrl} />
           </div>
-          <p className="mt-2 text-xs leading-5 text-emerald-800">
+          <p className="mt-2 text-xs leading-5 text-emerald-800 dark:text-emerald-400">
             The link is single-use and expires in 7 days. It will only be shown
             once, so copy it now.
           </p>

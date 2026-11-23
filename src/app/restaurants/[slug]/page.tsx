@@ -107,7 +107,7 @@ export default async function PublicRestaurantPage({
         </div>
       ) : null}
 
-      <div className="border-b border-zinc-200 bg-white">
+      <div className="border-b border-zinc-200 bg-surface">
         <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
           <Link
             href="/"
@@ -128,7 +128,7 @@ export default async function PublicRestaurantPage({
               {restaurant.name}
             </h1>
             {restaurant.cuisineType ? (
-              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-600/20">
+              <span className="rounded-full bg-accent-subtle px-2.5 py-1 text-xs font-medium text-accent ring-1 ring-inset ring-accent/30">
                 {restaurant.cuisineType}
               </span>
             ) : null}
@@ -196,9 +196,9 @@ export default async function PublicRestaurantPage({
           </p>
 
           {menus.length === 0 ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center">
+            <div className="mt-5 rounded-2xl border border-dashed border-zinc-300 bg-surface px-6 py-12 text-center">
               <UtensilsCrossed
-                className="mx-auto h-8 w-8 text-zinc-300"
+                className="mx-auto h-8 w-8 text-zinc-300 dark:text-zinc-500"
                 aria-hidden="true"
               />
               <p className="mt-3 text-sm font-medium text-zinc-700">
@@ -220,7 +220,7 @@ export default async function PublicRestaurantPage({
                       <li key={menu.id} className="shrink-0">
                         <a
                           href={`#menu-${menu.id}`}
-                          className="block rounded-full px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-white hover:text-zinc-900 hover:ring-1 hover:ring-zinc-200"
+                          className="block rounded-full px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-surface hover:text-zinc-900 hover:ring-1 hover:ring-zinc-200"
                         >
                           {menu.title}
                         </a>
@@ -253,7 +253,7 @@ export default async function PublicRestaurantPage({
                         </div>
                         <Link
                           href={`/restaurants/${restaurant.slug}/menus/${menu.slug}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-900"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-surface px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-900"
                         >
                           Open standalone menu
                           <ExternalLink
@@ -284,7 +284,7 @@ export default async function PublicRestaurantPage({
 
         <aside className="space-y-5">
           {restaurant.operatingHours ? (
-            <section className="rounded-2xl border border-zinc-200 bg-white p-5">
+            <section className="rounded-2xl border border-zinc-200 bg-surface p-5">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
                 <CalendarClock className="h-4 w-4 text-zinc-400" aria-hidden="true" />
                 Operating hours
@@ -295,7 +295,7 @@ export default async function PublicRestaurantPage({
             </section>
           ) : null}
 
-          <section className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm leading-6 text-zinc-600">
+          <section className="rounded-2xl border border-zinc-200 bg-surface p-5 text-sm leading-6 text-zinc-600">
             <h2 className="text-sm font-semibold text-zinc-900">
               Before you visit
             </h2>

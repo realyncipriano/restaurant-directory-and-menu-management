@@ -93,7 +93,7 @@ export default async function PublicMenuPage({
         }}
       />
 
-      <div id="top" className="border-b border-zinc-200 bg-white">
+      <div id="top" className="border-b border-zinc-200 bg-surface">
         <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
           <nav className="flex flex-wrap items-center gap-1.5 text-sm text-zinc-500">
             <Link href="/" className="hover:text-zinc-800">
@@ -111,7 +111,7 @@ export default async function PublicMenuPage({
           </nav>
 
           <div className="mt-3 flex items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-subtle text-accent">
               <UtensilsCrossed className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
@@ -153,7 +153,7 @@ export default async function PublicMenuPage({
               <a
                 key={category.id}
                 href={`#category-${category.id}`}
-                className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-white hover:text-zinc-900 hover:ring-1 hover:ring-zinc-200"
+                className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-surface hover:text-zinc-900 hover:ring-1 hover:ring-zinc-200"
               >
                 {category.name}
               </a>
@@ -165,7 +165,7 @@ export default async function PublicMenuPage({
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
         <MenuContent categories={categories} headingLevel={2} />
 
-        <p className="mt-12 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-xs leading-5 text-zinc-500">
+        <p className="mt-12 rounded-xl border border-zinc-200 bg-surface px-4 py-3 text-xs leading-5 text-zinc-500">
           Prices and availability are supplied by the restaurant and may change.
           Confirm details with {restaurant.name} before ordering.
         </p>

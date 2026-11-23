@@ -1,13 +1,15 @@
 @import "tailwindcss";
 
-:root {
-  color-scheme: light;
-}
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+}
 
+@theme {
+  /* Warm neutral scale. In dark mode the scale is inverted so the same
+     semantic classes (zinc-50 = page, zinc-900 = text) keep working. */
   --color-zinc-50: #faf8f3;
   --color-zinc-100: #f2eee6;
   --color-zinc-200: #e5ded2;
@@ -31,11 +33,79 @@
   --color-amber-800: #743b22;
   --color-amber-900: #5b311f;
   --color-amber-950: #351a10;
+
+  --color-background: #faf8f3;
+  --color-foreground: #241f1a;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f2eee6;
+  --color-accent: #914725;
+  --color-accent-strong: #743b22;
+  --color-accent-contrast: #ffffff;
+  --color-accent-subtle: #fff4e7;
+  --color-accent-border: #f3d2a8;
 }
 
-body {
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  background-color: #faf8f3;
+:root {
+  color-scheme: light;
+}
+
+:root.dark {
+  color-scheme: dark;
+
+  --color-zinc-50: #15110d;
+  --color-zinc-100: #1c1712;
+  --color-zinc-200: #2f2720;
+  --color-zinc-300: #42382d;
+  --color-zinc-400: #978c7e;
+  --color-zinc-500: #a99e8f;
+  --color-zinc-600: #bdb3a5;
+  --color-zinc-700: #d0c7b9;
+  --color-zinc-800: #e0d8cc;
+  --color-zinc-900: #f0ebe2;
+  --color-zinc-950: #faf8f3;
+
+  --color-background: #15110d;
+  --color-foreground: #f0ebe2;
+  --color-surface: #241e18;
+  --color-surface-muted: #1c1712;
+  --color-accent: #e8b675;
+  --color-accent-strong: #f3d2a8;
+  --color-accent-contrast: #241e18;
+  --color-accent-subtle: #2e1e12;
+  --color-accent-border: #6b3d22;
+
+  --color-red-50: #2a1414;
+  --color-red-100: #351a1a;
+  --color-red-200: #5a2626;
+  --color-red-300: #7f3333;
+
+  --color-emerald-50: #0e2a22;
+  --color-emerald-100: #14362b;
+  --color-emerald-200: #1f4a3b;
+  --color-emerald-300: #2f6b53;
+
+  --color-sky-50: #0d1f2e;
+  --color-sky-100: #12293c;
+  --color-sky-200: #1d3f5c;
+  --color-sky-300: #2a5a80;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+
+  ::selection {
+    background-color: var(--color-accent-border);
+    color: var(--color-foreground);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
 }
 
 @keyframes modal-backdrop-in {
@@ -56,16 +126,6 @@ body {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
-}
-
-::selection {
-  background-color: #f3d2a8;
-  color: #351a10;
-}
-
-:focus-visible {
-  outline: 2px solid #ad5c2c;
-  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

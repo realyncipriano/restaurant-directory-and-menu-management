@@ -18,7 +18,7 @@ export function MenuContent({
 
   if (categories.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center text-sm text-zinc-500">
+      <div className="rounded-2xl border border-dashed border-zinc-300 bg-surface px-6 py-12 text-center text-sm text-zinc-500">
         This menu does not have any categories yet.
       </div>
     );

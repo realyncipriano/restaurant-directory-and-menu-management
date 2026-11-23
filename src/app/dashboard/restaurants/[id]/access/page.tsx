@@ -28,7 +28,7 @@ export const metadata: Metadata = {
 };
 
 const checkboxClass =
-  "mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-300 text-amber-600 focus:ring-2 focus:ring-amber-600/40";
+  "mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-300 text-accent focus:ring-2 focus:ring-accent/40";
 
 const permissionOptions = [
   {
@@ -176,7 +176,7 @@ export default async function RestaurantAccessPage({
                             {permissionOptions.map((option) => (
                               <label
                                 key={option.name}
-                                className="flex cursor-pointer items-start gap-2 rounded-lg bg-white px-2.5 py-2 text-xs ring-1 ring-inset ring-zinc-200 transition hover:ring-amber-300"
+                                className="flex cursor-pointer items-start gap-2 rounded-lg bg-surface px-2.5 py-2 text-xs ring-1 ring-inset ring-zinc-200 transition hover:ring-amber-300"
                               >
                                 <input
                                   type="checkbox"

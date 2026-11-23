@@ -57,7 +57,7 @@ export function ImportCategoryControls({
                   variant: "outline",
                   size: "sm",
                   className:
-                    "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
+                    "border-emerald-300 bg-emerald-50 text-emerald-800 dark:text-emerald-400 hover:bg-emerald-100",
                 })}
               >
                 Accept pending in {category.name}

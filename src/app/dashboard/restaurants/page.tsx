@@ -69,11 +69,11 @@ export default async function RestaurantsPage() {
             <Link
               key={restaurant.id}
               href={`/dashboard/restaurants/${restaurant.id}`}
-              className="group flex flex-col rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md"
+              className="group flex flex-col rounded-2xl border border-zinc-200 bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h2 className="truncate text-base font-semibold text-zinc-900 group-hover:text-amber-800">
+                  <h2 className="truncate text-base font-semibold text-zinc-900 group-hover:text-accent">
                     {restaurant.name}
                   </h2>
                   <p className="mt-0.5 truncate font-mono text-xs text-zinc-500">
@@ -122,7 +122,7 @@ export default async function RestaurantsPage() {
                 </div>
               ) : null}
 
-              <p className="mt-4 flex items-center gap-1 border-t border-zinc-100 pt-3 text-xs font-medium text-amber-700">
+              <p className="mt-4 flex items-center gap-1 border-t border-zinc-100 pt-3 text-xs font-medium text-accent">
                 Open restaurant
                 <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
               </p>

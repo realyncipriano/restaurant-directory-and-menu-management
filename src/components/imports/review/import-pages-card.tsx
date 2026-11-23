@@ -41,7 +41,7 @@ export function ImportPagesCard({
                 className="h-48 w-full object-contain"
                 loading="lazy"
               />
-              <p className="bg-white px-3 py-2 text-xs text-zinc-500">
+              <p className="bg-surface px-3 py-2 text-xs text-zinc-500">
                 Page {page.pageNumber} ·{" "}
                 <span className="capitalize">{page.processingStatus}</span>
               </p>

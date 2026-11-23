@@ -40,7 +40,7 @@ export function ImportItemList({
             : " across all categories"}
         </p>
         {visibleReviewCount > 0 ? (
-          <p className="flex items-center gap-1 text-xs text-amber-800">
+          <p className="flex items-center gap-1 text-xs text-accent">
             <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
             {visibleReviewCount} item{visibleReviewCount === 1 ? "" : "s"}{" "}
             flagged for review
@@ -49,11 +49,11 @@ export function ImportItemList({
       </div>
 
       {itemCount === 0 ? (
-        <p className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-10 text-center text-sm text-zinc-500">
+        <p className="rounded-2xl border border-dashed border-zinc-300 bg-surface px-6 py-10 text-center text-sm text-zinc-500">
           No extracted items yet.
         </p>
       ) : groups.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-10 text-center text-sm text-zinc-500">
+        <p className="rounded-2xl border border-dashed border-zinc-300 bg-surface px-6 py-10 text-center text-sm text-zinc-500">
           No items match this category.
         </p>
       ) : (

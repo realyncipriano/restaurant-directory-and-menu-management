@@ -16,7 +16,7 @@ export function MenuCategoryNav({
   return (
     <nav
       aria-label="Jump to menu category"
-      className="rounded-xl border border-zinc-200 bg-white/90 p-2 shadow-sm lg:sticky lg:top-[4.5rem] lg:z-20 lg:backdrop-blur"
+      className="rounded-xl border border-zinc-200 bg-surface/90 p-2 shadow-sm lg:sticky lg:top-[4.5rem] lg:z-20 lg:backdrop-blur"
     >
       <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
         <span className="shrink-0 px-2 text-[11px] font-medium uppercase tracking-wide text-zinc-400">
