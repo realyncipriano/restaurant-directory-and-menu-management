@@ -224,7 +224,10 @@ export default async function RestaurantAccessPage({
                               value={member.id}
                             />
                             <ConfirmButton
-                              message={`Remove all access for ${member.name}?`}
+                              title={`Remove access for ${member.name}?`}
+                              message="They will no longer be able to view or manage this restaurant."
+                              confirmLabel="Remove access"
+                              pendingLabel="Removing..."
                               className={buttonClass({
                                 variant: "danger",
                                 size: "sm",

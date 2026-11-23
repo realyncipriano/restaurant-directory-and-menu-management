@@ -107,7 +107,10 @@ export function ImageUploadForm({
                 <input key={name} type="hidden" name={name} value={value} />
               ))}
               <ConfirmButton
-                message={`${removeLabel}? This cannot be undone.`}
+                title={`${removeLabel}?`}
+                message="This image will be removed from the restaurant profile. This cannot be undone."
+                confirmLabel={removeLabel}
+                pendingLabel="Removing..."
                 className="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400"
               >
                 {removeLabel}

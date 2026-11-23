@@ -32,11 +32,14 @@ export function MenuDeleteCard({
           <input type="hidden" name="restaurantId" value={restaurantId} />
           <input type="hidden" name="menuId" value={menuId} />
           <ConfirmButton
+            title={`Delete “${menuTitle}”?`}
             message={
               hasPublishedVersion
-                ? `Delete “${menuTitle}” and all of its versions? The live menu will disappear from public pages.`
-                : `Delete “${menuTitle}” and all of its versions?`
+                ? "All versions will be deleted and the live menu will disappear from public pages. The data stays archived and cannot be restored from the app."
+                : "All versions will be deleted. The data stays archived and cannot be restored from the app."
             }
+            confirmLabel="Delete menu"
+            pendingLabel="Deleting..."
             className={buttonClass({ variant: "danger", size: "sm" })}
           >
             Delete menu

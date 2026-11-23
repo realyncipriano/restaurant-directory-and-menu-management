@@ -263,7 +263,10 @@ export function ItemForm({
           <input type="hidden" name="menuId" value={menuId} />
           <input type="hidden" name="itemId" value={values.id} />
           <ConfirmButton
-            message={`Remove “${values.name}” from this draft menu?`}
+            title={`Delete “${values.name}”?`}
+            message="This removes the item from the draft menu."
+            confirmLabel="Delete item"
+            pendingLabel="Deleting..."
             className="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400"
           >
             Delete item

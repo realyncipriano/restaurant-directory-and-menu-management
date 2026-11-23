@@ -150,8 +150,8 @@ export default async function MenuImportsPage({
                 const retentionLabel = `${data.retentionDays} day${data.retentionDays === 1 ? "" : "s"}`;
                 const confirmation =
                   menuImport.status === "applied"
-                    ? `Delete this scan from history? Applied menu changes stay in place. The scan and its source images will be permanently removed after ${retentionLabel}.`
-                    : `Delete this scan from history? It and its source images will be permanently removed after ${retentionLabel}.`;
+                    ? `Applied menu changes stay in place. The scan and its source images will be permanently removed after ${retentionLabel}.`
+                    : `The scan and its source images will be permanently removed after ${retentionLabel}.`;
 
                 return (
                   <li
@@ -213,7 +213,10 @@ export default async function MenuImportsPage({
                               value={menuImport.id}
                             />
                             <ConfirmButton
+                              title="Delete this scan?"
                               message={confirmation}
+                              confirmLabel="Delete scan"
+                              pendingLabel="Deleting..."
                               className={buttonClass({
                                 variant: "danger",
                                 size: "sm",

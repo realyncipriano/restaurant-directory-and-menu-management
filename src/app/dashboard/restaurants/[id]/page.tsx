@@ -398,7 +398,10 @@ export default async function RestaurantDetailPage({
                         value={restaurant.id}
                       />
                       <ConfirmButton
-                        message="Archive this restaurant? It will be hidden from the public directory."
+                        title="Archive this restaurant?"
+                        message="It will be hidden from the public directory. You can reactivate it later."
+                        confirmLabel="Archive restaurant"
+                        pendingLabel="Archiving..."
                         className={buttonClass({
                           variant: "danger",
                           size: "sm",

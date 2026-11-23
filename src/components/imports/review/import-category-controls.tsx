@@ -94,7 +94,10 @@ export function ImportCategoryControls({
                 value={category.name}
               />
               <ConfirmButton
+                title={`Keep only “${category.name}”?`}
                 message={keepOnlyMessage}
+                confirmLabel={`Keep only “${category.name}”`}
+                pendingLabel="Applying..."
                 className={buttonClass({
                   variant: "secondary",
                   size: "sm",

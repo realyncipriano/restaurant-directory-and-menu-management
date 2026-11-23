@@ -171,7 +171,7 @@ export function buildKeepOnlyMessage(
   activeCategory: CategorySummary,
   pendingOutsideCategory: number,
 ): string {
-  return `Keep only “${activeCategory.name}”? This accepts eligible pending items in this category and moves eligible pending items outside it to rejected. ${itemCountLabel(activeCategory.pending)} are pending in this category and ${itemCountLabel(pendingOutsideCategory)} outside it. Flagged, low-confidence, unpriced, and duplicate items outside this category stay pending for manual review.`;
+  return `This accepts eligible pending items in this category and moves eligible pending items outside it to rejected. ${itemCountLabel(activeCategory.pending)} are pending in this category and ${itemCountLabel(pendingOutsideCategory)} outside it. Flagged, low-confidence, unpriced, and duplicate items outside this category stay pending for manual review.`;
 }
 
 export function buildImportReviewView(

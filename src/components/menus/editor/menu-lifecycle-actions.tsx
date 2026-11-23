@@ -55,7 +55,10 @@ export function MenuLifecycleActions({
               <input type="hidden" name="restaurantId" value={restaurantId} />
               <input type="hidden" name="menuId" value={menuId} />
               <ConfirmButton
-                message="Discard this draft? The published menu will stay live."
+                title="Discard this draft?"
+                message="The published menu will stay live. The draft stays in version history as archived."
+                confirmLabel="Discard draft"
+                pendingLabel="Discarding..."
                 className={buttonClass({ variant: "danger", size: "sm" })}
               >
                 Discard draft

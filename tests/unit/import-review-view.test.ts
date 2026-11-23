@@ -232,7 +232,7 @@ describe("import review view", () => {
     );
 
     expect(view.keepOnlyMessage).toBe(
-      "Keep only “Coffee”? This accepts eligible pending items in this category and moves eligible pending items outside it to rejected. 2 items are pending in this category and 1 item outside it. Flagged, low-confidence, unpriced, and duplicate items outside this category stay pending for manual review.",
+      "This accepts eligible pending items in this category and moves eligible pending items outside it to rejected. 2 items are pending in this category and 1 item outside it. Flagged, low-confidence, unpriced, and duplicate items outside this category stay pending for manual review.",
     );
   });
 
