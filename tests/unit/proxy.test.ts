@@ -8,6 +8,11 @@ import {
   vi,
 } from "vitest";
 
+import {
+  REQUEST_ID_HEADER,
+  isRequestId,
+} from "@/lib/observability/request-id";
+
 const existenceMocks = vi.hoisted(() => ({
   publicRestaurantExists: vi.fn(),
   publicMenuExists: vi.fn(),
@@ -30,6 +35,10 @@ function request(
   return new NextRequest(`http://localhost${path}`, init);
 }
 
+function expectRequestId(response: Response) {
+  expect(isRequestId(response.headers.get(REQUEST_ID_HEADER))).toBe(true);
+}
+
 function expectNotFound(response: Response) {
   expect(response.status).toBe(404);
   expect(response.headers.get("content-type")).toBe(
@@ -37,6 +46,7 @@ function expectNotFound(response: Response) {
   );
   expect(response.headers.get("cache-control")).toBe("no-store");
   expect(response.headers.get("x-robots-tag")).toBe("noindex");
+  expectRequestId(response);
 }
 
 function expectServiceUnavailable(response: Response) {
@@ -48,6 +58,7 @@ function expectServiceUnavailable(response: Response) {
   expect(response.headers.get("retry-after")).toBe("30");
   expect(response.headers.get("x-robots-tag")).toBe("noindex");
   expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+  expectRequestId(response);
 }
 
 beforeEach(() => {
@@ -94,6 +105,43 @@ describe("public detail proxy", () => {
     const response = await proxy(request("/restaurants/k-cafe"));
 
     expect(response.headers.get("x-middleware-next")).toBe("1");
+    expectRequestId(response);
+  });
+
+  it("generates a request ID and forwards it downstream", async () => {
+    const response = await proxy(request("/restaurants/k-cafe"));
+    const requestId = response.headers.get(REQUEST_ID_HEADER);
+
+    expect(isRequestId(requestId)).toBe(true);
+    expect(
+      response.headers.get("x-middleware-request-x-request-id"),
+    ).toBe(requestId);
+    expect(
+      response.headers.get("x-middleware-override-headers"),
+    ).toContain(REQUEST_ID_HEADER);
+  });
+
+  it("reuses a valid inbound request ID for correlation", async () => {
+    const response = await proxy(
+      request("/restaurants/k-cafe", {
+        headers: { [REQUEST_ID_HEADER]: "req_upstream-1234" },
+      }),
+    );
+
+    expect(response.headers.get(REQUEST_ID_HEADER)).toBe(
+      "req_upstream-1234",
+    );
+  });
+
+  it("replaces an invalid inbound request ID", async () => {
+    const response = await proxy(
+      request("/restaurants/k-cafe", {
+        headers: { [REQUEST_ID_HEADER]: "not valid" },
+      }),
+    );
+
+    expect(response.headers.get(REQUEST_ID_HEADER)).not.toBe("not valid");
+    expectRequestId(response);
   });
 
   it("continues to render a known published menu", async () => {
@@ -429,6 +477,7 @@ describe("dashboard proxy guard", () => {
       "/dashboard/restaurants",
     );
     expect(getDbMock).not.toHaveBeenCalled();
+    expectRequestId(response);
   });
 
   it("still allows dashboard requests with a session cookie", async () => {
@@ -439,5 +488,22 @@ describe("dashboard proxy guard", () => {
     );
 
     expect(response.headers.get("x-middleware-next")).toBe("1");
+    expectRequestId(response);
+  });
+
+  it("does not treat a request ID as authentication", async () => {
+    const response = await proxy(
+      request("/dashboard/restaurants", {
+        headers: { [REQUEST_ID_HEADER]: "req_upstream-1234" },
+      }),
+    );
+
+    expect(response.status).toBe(307);
+    expect(new URL(response.headers.get("location") ?? "").pathname).toBe(
+      "/login",
+    );
+    expect(response.headers.get(REQUEST_ID_HEADER)).toBe(
+      "req_upstream-1234",
+    );
   });
 });

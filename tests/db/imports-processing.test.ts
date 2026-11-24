@@ -77,7 +77,7 @@ describe("menu import processing (ephemeral PGlite)", () => {
     extractionMock.extractMenuItems.mockClear();
   });
 
-  async function setupImport(status: "processing" | "uploading") {
+  async function setupImport(status: "processing" | "uploading" | "uploaded") {
     const admin = await seedUser(db, {
       email: "admin@example.com",
       role: "admin",
@@ -134,6 +134,83 @@ describe("menu import processing (ephemeral PGlite)", () => {
       .from(menuImportPages)
       .where(eq(menuImportPages.importId, record.id));
     expect(page?.processingStatus).toBe("processed");
+  });
+
+  it("logs completion only after the processed import is committed", async () => {
+    const { admin, record } = await setupImport("uploaded");
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    try {
+      await processMenuImport(db, admin.id, record.id);
+
+      const completed = logSpy.mock.calls
+        .map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
+        .find((entry) => entry.event === "imports.menu_import_completed");
+      expect(completed).toMatchObject({
+        level: "info",
+        event: "imports.menu_import_completed",
+        context: {
+          importId: record.id,
+          itemCount: 0,
+          pageCount: 1,
+          attempt: 2,
+        },
+      });
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  it("keeps a committed import when completion logging fails", async () => {
+    const { admin, record } = await setupImport("uploaded");
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {
+      throw new Error("console unavailable");
+    });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {
+      throw new Error("error console unavailable");
+    });
+
+    try {
+      await expect(
+        processMenuImport(db, admin.id, record.id),
+      ).resolves.toBeUndefined();
+    } finally {
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+
+    const [updated] = await db
+      .select()
+      .from(menuImports)
+      .where(eq(menuImports.id, record.id));
+    expect(updated?.status).toBe("needs_review");
+    expect(updated?.processingToken).toBeNull();
+  });
+
+  it("cleans up a failed import when failure logging throws", async () => {
+    const { admin, record } = await setupImport("uploaded");
+    extractionMock.extractMenuItems.mockRejectedValueOnce(
+      new Error("provider unavailable"),
+    );
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {
+      throw new Error("error console unavailable");
+    });
+
+    try {
+      await expect(
+        processMenuImport(db, admin.id, record.id),
+      ).rejects.toBeInstanceOf(ConflictError);
+    } finally {
+      errorSpy.mockRestore();
+    }
+
+    const [updated] = await db
+      .select()
+      .from(menuImports)
+      .where(eq(menuImports.id, record.id));
+    expect(updated?.status).toBe("failed");
+    expect(updated?.processingToken).toBeNull();
+    expect(updated?.processingStartedAt).toBeNull();
   });
 
   it("rejects a processing import that is still active", async () => {
