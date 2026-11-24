@@ -1,12 +1,13 @@
 import "server-only";
 
-import { and, eq, gt, isNull, lte, or } from "drizzle-orm";
+import { and, eq, gt, isNull, lte, ne, or } from "drizzle-orm";
 import { cookies } from "next/headers";
 
 import { sessions, users } from "@/db/schema";
 import type { DbExecutor } from "@/db/types";
 import { logger } from "@/lib/observability/logger";
 import {
+  MFA_CHALLENGE_COOKIE,
   SESSION_COOKIE,
   SESSION_LAST_USED_THROTTLE_SECONDS,
   SESSION_TTL_SECONDS,
@@ -20,6 +21,7 @@ export type SessionUser = {
   email: string;
   role: "admin" | "authorized_user";
   accountStatus: "invited" | "active" | "deactivated";
+  mfaEnabled: boolean;
   sessionId: string;
 };
 
@@ -63,6 +65,7 @@ export async function getSessionUserByToken(
       email: users.email,
       role: users.role,
       accountStatus: users.accountStatus,
+      mfaEnabledAt: users.mfaEnabledAt,
       sessionId: sessions.id,
       createdAt: sessions.createdAt,
       lastUsedAt: sessions.lastUsedAt,
@@ -122,6 +125,7 @@ export async function getSessionUserByToken(
     email: row.email,
     role: row.role,
     accountStatus: row.accountStatus,
+    mfaEnabled: row.mfaEnabledAt !== null,
     sessionId: row.sessionId,
   };
 }
@@ -149,6 +153,27 @@ export async function revokeAllUserSessions(
     .update(sessions)
     .set({ revokedAt: now })
     .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)))
+    .returning({ id: sessions.id });
+
+  return revoked.length;
+}
+
+export async function revokeOtherUserSessions(
+  db: DbExecutor,
+  userId: string,
+  currentSessionId: string,
+  now = new Date(),
+): Promise<number> {
+  const revoked = await db
+    .update(sessions)
+    .set({ revokedAt: now })
+    .where(
+      and(
+        eq(sessions.userId, userId),
+        ne(sessions.id, currentSessionId),
+        isNull(sessions.revokedAt),
+      ),
+    )
     .returning({ id: sessions.id });
 
   return revoked.length;
@@ -204,6 +229,31 @@ export async function clearSessionCookie(): Promise<void> {
 export async function readSessionToken(): Promise<string | null> {
   const store = await cookies();
   return store.get(SESSION_COOKIE)?.value ?? null;
+}
+
+export async function setMfaChallengeCookie(
+  token: string,
+  expiresAt: Date,
+): Promise<void> {
+  const store = await cookies();
+  store.set(
+    MFA_CHALLENGE_COOKIE,
+    token,
+    sessionCookieOptions(expiresAt),
+  );
+}
+
+export async function clearMfaChallengeCookie(): Promise<void> {
+  const store = await cookies();
+  store.set(MFA_CHALLENGE_COOKIE, "", {
+    ...sessionCookieOptions(new Date(0)),
+    maxAge: 0,
+  });
+}
+
+export async function readMfaChallengeToken(): Promise<string | null> {
+  const store = await cookies();
+  return store.get(MFA_CHALLENGE_COOKIE)?.value ?? null;
 }
 
 export async function getCurrentUser(

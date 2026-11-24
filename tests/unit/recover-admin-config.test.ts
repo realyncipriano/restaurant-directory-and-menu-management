@@ -24,7 +24,20 @@ describe("administrator recovery CLI configuration", () => {
       appUrl: "https://menus.example.com",
       authSecret: SECRET,
       allowDevelopmentUrl: false,
+      disableMfa: false,
     });
+  });
+
+  it("only disables MFA with the explicit opt-in", () => {
+    expect(readAdminRecoveryConfig(env()).disableMfa).toBe(false);
+    expect(
+      readAdminRecoveryConfig(env({ RECOVER_ADMIN_DISABLE_MFA: "1" }))
+        .disableMfa,
+    ).toBe(true);
+    expect(
+      readAdminRecoveryConfig(env({ RECOVER_ADMIN_DISABLE_MFA: "true" }))
+        .disableMfa,
+    ).toBe(false);
   });
 
   it.each([
@@ -173,6 +186,7 @@ describe("administrator recovery CLI configuration", () => {
       appUrl: "http://localhost:3000",
       authSecret: SECRET,
       allowDevelopmentUrl: true,
+      disableMfa: false,
     });
   });
 

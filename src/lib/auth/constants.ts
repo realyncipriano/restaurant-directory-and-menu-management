@@ -1,6 +1,9 @@
 export const SESSION_COOKIE = "rdmm_session";
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 
+export const MFA_CHALLENGE_COOKIE = "rdmm_mfa";
+export const MFA_CHALLENGE_TTL_SECONDS = 5 * 60;
+
 export const DEFAULT_SESSION_IDLE_TTL_SECONDS = 24 * 60 * 60;
 export const MIN_SESSION_IDLE_TTL_SECONDS = 5 * 60;
 export const SESSION_LAST_USED_THROTTLE_SECONDS = 5 * 60;

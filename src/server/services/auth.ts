@@ -6,6 +6,20 @@ export { requireActiveActor, requireAdminActor } from "./auth/actors";
 export { createInvite } from "./auth/invitations";
 export { loginWithPassword } from "./auth/login";
 export {
+  beginMfaEnrollment,
+  cancelMfaEnrollment,
+  completeMfaChallenge,
+  confirmMfaEnrollment,
+  disableMfa,
+  getMfaEnrollmentSetup,
+  getMfaStatus,
+  issueMfaChallenge,
+  regenerateRecoveryCodes,
+  type MfaEnrollmentSetup,
+  type MfaRecoveryCodeSet,
+  type MfaStatus,
+} from "./auth/mfa";
+export {
   changePassword,
   resetPasswordWithToken,
 } from "./auth/passwords";

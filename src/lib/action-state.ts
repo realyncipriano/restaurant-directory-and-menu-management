@@ -9,8 +9,13 @@ export type InviteFormState = FormState & {
   inviteEmail?: string;
 };
 
+export type MfaFormState = FormState & {
+  recoveryCodes?: string[];
+};
+
 export const EMPTY_FORM_STATE: FormState = {};
 export const EMPTY_INVITE_STATE: InviteFormState = {};
+export const EMPTY_MFA_STATE: MfaFormState = {};
 
 export function formString(formData: FormData, key: string): string {
   const value = formData.get(key);

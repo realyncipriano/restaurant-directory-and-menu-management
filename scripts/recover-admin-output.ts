@@ -6,12 +6,20 @@ export const RECOVERY_TOKEN_WARNING =
 export function recoveryOutputLines(link: {
   email: string;
   url: string;
+  mfaReset?: boolean;
 }): { warning: string; lines: string[] } {
+  const mfaResetLines = link.mfaReset
+    ? [
+        "Multi-factor authentication was disabled for this account. Re-enroll after signing in.",
+      ]
+    : [];
+
   return {
     warning: RECOVERY_TOKEN_WARNING,
     lines: [
       `Recovery link for ${link.email}:`,
       link.url,
+      ...mfaResetLines,
       "This link is single-use and expires in one hour. Deliver it over a secure channel and do not paste it into shared logs.",
     ],
   };

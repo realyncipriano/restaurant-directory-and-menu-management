@@ -30,6 +30,7 @@ async function main() {
     const output = recoveryOutputLines({
       email: link.user.email,
       url: link.url,
+      mfaReset: config.disableMfa,
     });
 
     console.warn(output.warning);

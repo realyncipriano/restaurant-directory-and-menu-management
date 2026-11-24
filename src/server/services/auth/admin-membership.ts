@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 
 import type { DbTransaction } from "@/db/client";
 import { users } from "@/db/schema";
+import { isMfaRequiredForAdmins } from "@/lib/env";
 import { ForbiddenError, UnauthenticatedError } from "@/lib/errors";
 
 /**
@@ -34,6 +35,11 @@ export async function requireAdminActorForUpdate(
   }
   if (actor.role !== "admin") {
     throw new ForbiddenError();
+  }
+  if (isMfaRequiredForAdmins() && !actor.mfaEnabledAt) {
+    throw new ForbiddenError(
+      "Multi-factor authentication is required for administrator actions.",
+    );
   }
   return actor;
 }

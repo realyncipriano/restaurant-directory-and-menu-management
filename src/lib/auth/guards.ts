@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import { getDb } from "@/db/client";
+import { isMfaRequiredForAdmins } from "@/lib/env";
 import { getCurrentUser, type SessionUser } from "./session";
 
 export async function requireCurrentUser(
@@ -21,6 +22,9 @@ export async function requireAdminUser(): Promise<SessionUser> {
   const user = await requireCurrentUser();
   if (user.role !== "admin") {
     redirect("/dashboard");
+  }
+  if (isMfaRequiredForAdmins() && !user.mfaEnabled) {
+    redirect("/dashboard/account?mfa=required");
   }
   return user;
 }

@@ -69,6 +69,40 @@ export class InvalidCredentialsError extends AppError {
   }
 }
 
+export type MfaChallenge = {
+  token: string;
+  expiresAt: Date;
+};
+
+export class MfaChallengeRequiredError extends AppError {
+  constructor(readonly challenge: MfaChallenge) {
+    super(
+      "mfa_required",
+      "Enter the verification code from your authenticator app.",
+      401,
+    );
+    this.name = "MfaChallengeRequiredError";
+  }
+}
+
+export class MfaChallengeInvalidError extends AppError {
+  constructor(
+    message = "This verification session has expired. Sign in again.",
+  ) {
+    super("mfa_challenge_invalid", message, 401);
+    this.name = "MfaChallengeInvalidError";
+  }
+}
+
+export class InvalidMfaCodeError extends AppError {
+  constructor(
+    message = "That authentication code is not valid. Try again.",
+  ) {
+    super("invalid_mfa_code", message, 401);
+    this.name = "InvalidMfaCodeError";
+  }
+}
+
 export function safeErrorMessage(
   error: unknown,
   fallback = "Something went wrong. Please try again.",

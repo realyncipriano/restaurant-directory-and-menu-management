@@ -5,6 +5,7 @@ export type AdminRecoveryConfig = {
   appUrl: string;
   authSecret: string;
   allowDevelopmentUrl: boolean;
+  disableMfa: boolean;
 };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -65,6 +66,7 @@ export function readAdminRecoveryConfig(
 
   const rawAppUrl = required(env, "APP_URL");
   const appUrl = parseRecoveryAppUrl(rawAppUrl, { allowDevelopmentUrl });
+  const disableMfa = env.RECOVER_ADMIN_DISABLE_MFA?.trim() === "1";
 
-  return { email, appUrl, authSecret, allowDevelopmentUrl };
+  return { email, appUrl, authSecret, allowDevelopmentUrl, disableMfa };
 }

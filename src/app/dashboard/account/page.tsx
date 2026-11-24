@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Laptop, ShieldCheck, UserCircle } from "lucide-react";
+import QRCode from "qrcode";
 
 import { signOutEverywhereAction } from "@/app/(auth)/actions";
 import { ChangePasswordForm } from "@/components/account/change-password-form";
+import { MfaSettings } from "@/components/account/mfa-settings";
 import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import {
@@ -16,7 +18,11 @@ import { getDb } from "@/db/client";
 import { getSessionIdleTtlSeconds } from "@/lib/auth/constants";
 import { requireCurrentUser } from "@/lib/auth/guards";
 import { describeUserAgent } from "@/lib/user-agent";
-import { listUserSessions } from "@/server/services/auth";
+import {
+  getMfaEnrollmentSetup,
+  getMfaStatus,
+  listUserSessions,
+} from "@/server/services/auth";
 import { revokeSessionAction } from "./actions";
 
 export const metadata: Metadata = {
@@ -34,6 +40,11 @@ const errorMessages: Record<string, string> = {
   session_invalid: "That session reference is not valid.",
   session_missing: "That session was already signed out or has expired.",
   failed: "The session could not be revoked. Please try again.",
+  mfa_failed: "The multi-factor authentication change failed. Please try again.",
+  mfa_rate_limited:
+    "Too many multi-factor authentication attempts. Wait a few minutes and try again.",
+  mfa_conflict:
+    "The multi-factor authentication state changed. Refresh the page and try again.",
 };
 
 function formatTimestamp(value: Date): string {
@@ -60,21 +71,35 @@ export default async function AccountPage({
     updated?: string | string[];
     notice?: string | string[];
     error?: string | string[];
+    mfa?: string | string[];
   }>;
 }) {
   const user = await requireCurrentUser();
-  const [sessions, params] = await Promise.all([
+  const [sessions, mfaStatus, enrollmentSetup, params] = await Promise.all([
     listUserSessions(getDb(), {
       actorId: user.id,
       currentSessionId: user.sessionId,
     }),
+    getMfaStatus(getDb(), user.id),
+    getMfaEnrollmentSetup(getDb(), user.id),
     searchParams,
   ]);
+  const qrDataUrl = enrollmentSetup
+    ? await QRCode.toDataURL(enrollmentSetup.otpauthUrl, {
+        errorCorrectionLevel: "M",
+        margin: 1,
+        width: 416,
+      })
+    : null;
 
   const updated = params.updated === "1";
   const notice = first(params.notice);
+  const mfaNotice = first(params.mfa);
   const error = first(params.error);
   const idleWindow = idleWindowLabel(getSessionIdleTtlSeconds());
+  const enabledSince = mfaStatus.enabledAt
+    ? formatTimestamp(mfaStatus.enabledAt)
+    : null;
 
   return (
     <div className="space-y-6">
@@ -91,6 +116,32 @@ export default async function AccountPage({
       ) : null}
       {notice === "session_revoked" ? (
         <Notice tone="success">That session was signed out.</Notice>
+      ) : null}
+      {mfaStatus.required && !mfaStatus.enabled ? (
+        <Notice tone="warning" title="Administrator MFA is required">
+          Enable multi-factor authentication below to continue using
+          administrator tools.
+        </Notice>
+      ) : null}
+      {mfaNotice === "setup" ? (
+        <Notice tone="info">
+          Authenticator setup started. Scan the QR code below, then enter a
+          6-digit code to finish.
+        </Notice>
+      ) : null}
+      {mfaNotice === "cancelled" ? (
+        <Notice tone="info">Authenticator setup was cancelled.</Notice>
+      ) : null}
+      {mfaNotice === "enabled" ? (
+        <Notice tone="success">
+          Multi-factor authentication is enabled for this account.
+        </Notice>
+      ) : null}
+      {mfaNotice === "disabled" ? (
+        <Notice tone="warning">
+          Multi-factor authentication is disabled. Your password is now the only
+          sign-in factor.
+        </Notice>
       ) : null}
       {error ? (
         <Notice tone="error">{errorMessages[error] ?? errorMessages.failed}</Notice>
@@ -138,6 +189,30 @@ export default async function AccountPage({
           </CardBody>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader
+          icon={
+            <ShieldCheck
+              className="h-4 w-4 text-zinc-500"
+              aria-hidden="true"
+            />
+          }
+          title="Multi-factor authentication"
+          description="Add an authenticator app as a second sign-in factor, with single-use recovery codes."
+        />
+        <CardBody>
+          <MfaSettings
+            enabled={mfaStatus.enabled}
+            enabledSince={enabledSince}
+            pending={mfaStatus.pending}
+            recoveryCodesRemaining={mfaStatus.recoveryCodesRemaining}
+            required={mfaStatus.required}
+            secret={enrollmentSetup?.secret ?? null}
+            qrDataUrl={qrDataUrl}
+          />
+        </CardBody>
+      </Card>
 
       <Card>
         <CardHeader

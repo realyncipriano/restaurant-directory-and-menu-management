@@ -32,7 +32,9 @@ content is created only through the management console.
 
    - `DATABASE_URL` (pooled Neon URL) and `DATABASE_URL_DIRECT` (direct URL)
    - `AUTH_SECRET` (32+ random bytes)
-   - Optional `SESSION_IDLE_TIMEOUT_MINUTES` (defaults to 1440), `R2_*`, and
+   - Optional `MFA_ENCRYPTION_KEY` (32+ random bytes, recommended in
+     production), `MFA_REQUIRED_FOR_ADMINS` (defaults to off),
+     `SESSION_IDLE_TIMEOUT_MINUTES` (defaults to 1440), `R2_*`, and
      `EXTRACTION_*` values (see below)
 
 3. Inspect the migration target (read-only):
@@ -267,6 +269,41 @@ Every role change is audited as `user_role_changed` with the previous and new
 role. Roles are read from the database on each request, so changes apply
 immediately without signing the user out.
 
+### Authentication and optional MFA
+
+Passwords are hashed with Argon2id. Sign-in creates an opaque session token;
+only its hash is stored. Sessions expire seven days after sign-in and are also
+signed out after the configurable idle timeout (`SESSION_IDLE_TIMEOUT_MINUTES`,
+default 24 hours). The account page lists active sessions with device metadata,
+supports revoking individual sessions, and offers sign-out-everywhere.
+
+Administrators and authorized users can opt into TOTP multi-factor
+authentication from **Account security**. Enrollment requires a current
+authenticator code before MFA becomes active. TOTP secrets are encrypted with
+AES-256-GCM, and ten single-use recovery codes are stored only as keyed hashes.
+Accepted time steps are tracked so a code cannot be replayed. Enabling or
+disabling MFA revokes other sessions, and MFA-enabled users must complete a
+challenge after password login or password reset. Recovery codes work once and
+are accepted anywhere an authenticator code is requested.
+
+Set `MFA_ENCRYPTION_KEY` (32+ characters) in production. When it is empty the
+application falls back to `AUTH_SECRET`, but rotating `AUTH_SECRET` then makes
+existing TOTP secrets and recovery-code hashes unreadable. Use the
+sole-administrator recovery command with `RECOVER_ADMIN_DISABLE_MFA=1` if that
+happens.
+
+`MFA_REQUIRED_FOR_ADMINS` defaults to off. When set to `1`, administrators
+without MFA stay signed in but are redirected to the account page, and
+administrator pages and admin server actions are blocked until enrollment
+finishes. Enable enforcement only after every administrator has enrolled.
+MFA remains optional for authorized users.
+
+Authentication events are audited without credentials, tokens, or TOTP
+secrets: `login_failed`, `login_rate_limited`, `mfa_challenge_issued`,
+`mfa_challenge_succeeded`, `mfa_challenge_failed`, `mfa_rate_limited`,
+`mfa_recovery_code_used`, `mfa_enabled`, `mfa_disabled`, `user_logout`,
+`session_revoked`, and `sessions_revoked_all`, among others.
+
 ### Sole-administrator recovery
 
 `db:seed:admin` is bootstrap-only: it refuses to run when an administrator
@@ -277,8 +314,15 @@ access:
 ```bash
 RECOVER_ADMIN_EMAIL="admin@example.com" \
 RECOVER_ADMIN_CONFIRM=1 \
+RECOVER_ADMIN_DISABLE_MFA=1 \
 npm run db:recover:admin
 ```
+
+`RECOVER_ADMIN_DISABLE_MFA=1` is optional. Use it when the administrator also
+lost access to their authenticator and recovery codes; it clears the TOTP
+secret, recovery codes, and pending MFA challenges, and revokes existing
+sessions before issuing the reset link. The audit log records
+`admin_recovery_mfa_reset`.
 
 The command requires `AUTH_SECRET` (32+ characters), `APP_URL`, and a direct
 database URL through the normal environment or `.env.local`. It validates every

@@ -14,10 +14,15 @@ import {
 } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session";
 import { hashIdentifier } from "@/lib/auth/tokens";
-import { InvalidCredentialsError, RateLimitedError } from "@/lib/errors";
+import {
+  InvalidCredentialsError,
+  MfaChallengeRequiredError,
+  RateLimitedError,
+} from "@/lib/errors";
 import { loginSchema } from "@/lib/validation/auth";
 import { parseOrThrow } from "@/lib/validation/parse";
 import { writeAuditLog } from "../audit";
+import { issueMfaChallenge } from "./mfa";
 import { publicUser, type AuthResult } from "./shared";
 
 async function writeRateLimitAudit(
@@ -139,6 +144,14 @@ export async function loginWithPassword(
   }
 
   await resetRateLimit(db, accountKey);
+
+  if (user.mfaEnabledAt) {
+    const challenge = await issueMfaChallenge(db, user.id, {
+      now,
+      reason: "login",
+    });
+    throw new MfaChallengeRequiredError(challenge);
+  }
 
   await db
     .update(users)
