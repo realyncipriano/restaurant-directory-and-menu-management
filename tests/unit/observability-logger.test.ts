@@ -19,6 +19,22 @@ function lastRecord(spy: ReturnType<typeof vi.spyOn>) {
   return JSON.parse(String(call?.[0])) as Record<string, unknown>;
 }
 
+function drizzleQueryError(
+  cause: unknown,
+  param = "secret-menu-name",
+): Error {
+  return Object.assign(
+    new Error(
+      `Failed query: select * from menus where name = $1\nparams: ${param}`,
+    ),
+    {
+      query: "select * from menus where name = $1",
+      params: [param],
+      cause,
+    },
+  );
+}
+
 beforeEach(() => {
   process.env.LOG_LEVEL = "debug";
   process.env.VERCEL_GIT_COMMIT_SHA = "e857ba2586e1b9085386863c1276a4b6f87e9c5f";
@@ -165,6 +181,27 @@ describe("structured logger", () => {
     expect(lastRecord(errorSpy).event).toBe("logging.failed");
   });
 
+  it("logs only the Drizzle cause without query text or parameters", () => {
+    const error = drizzleQueryError(
+      Object.assign(new Error("connection refused"), {
+        code: "ECONNREFUSED",
+      }),
+    );
+
+    logger.error("test.drizzle-error", { error });
+
+    const raw = String(errorSpy.mock.calls[0]?.[0]);
+    expect(raw).not.toContain("Failed query");
+    expect(raw).not.toContain("select * from menus");
+    expect(raw).not.toContain("secret-menu-name");
+    expect(lastRecord(errorSpy).error).toMatchObject({
+      name: "DrizzleQueryError",
+      category: "network",
+      code: "ECONNREFUSED",
+      message: "connection refused",
+    });
+  });
+
   it("can suppress error details while keeping classification", () => {
     const serialized = serializeError(
       new Error("secret-restaurant postgres://user:pass@host/db"),
@@ -181,6 +218,34 @@ describe("structured logger", () => {
 });
 
 describe("error classification", () => {
+  it("classifies Drizzle query errors from their underlying cause", () => {
+    expect(
+      classifyError(
+        drizzleQueryError(
+          Object.assign(new Error("db unavailable"), { code: "08006" }),
+        ),
+      ),
+    ).toBe("database");
+    expect(
+      classifyError(
+        drizzleQueryError(
+          Object.assign(new Error("slow query"), { name: "TimeoutError" }),
+        ),
+      ),
+    ).toBe("timeout");
+  });
+
+  it("suppresses Drizzle query details when no cause is available", () => {
+    const serialized = serializeError(drizzleQueryError(undefined));
+
+    expect(serialized).toMatchObject({
+      name: "DrizzleQueryError",
+      category: "unknown",
+    });
+    expect(serialized?.message).toBeUndefined();
+    expect(serialized?.stack).toBeUndefined();
+  });
+
   it.each([
     [new ForbiddenError(), "authorization"],
     [Object.assign(new Error("db"), { code: "23505" }), "conflict"],

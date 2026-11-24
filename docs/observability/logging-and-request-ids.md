@@ -55,10 +55,17 @@ choose the value, so code must not make a security decision from it.
 `rate_limited`, `database`, `network`, `timeout`, `storage`,
 `external_service`, `configuration`, and `unknown`.
 
-Classification uses the application error types first, then error names, codes,
-and HTTP status values. A database outage is therefore distinguishable from a
-validation error or a storage failure without logging a query or connection
-string.
+Classification uses the application error types first, then walks the `cause`
+chain and uses error names, codes, and HTTP status values. Database failures
+wrapped by Drizzle are classified from the underlying driver error, so a
+database outage is distinguishable from a validation error or a storage failure
+without logging a query or connection string.
+
+Drizzle query errors embed the SQL text and parameters in the wrapper message.
+The logger never serialises that wrapper: it records `DrizzleQueryError` plus
+the cause's sanitised message, stack, and code, and it drops `query` and
+`params` entirely. If a wrapper has no cause, its message and stack are omitted
+rather than risk logging query data.
 
 ## Redaction and data minimisation
 

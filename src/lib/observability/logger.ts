@@ -65,6 +65,9 @@ type ErrorLike = {
   statusCode?: unknown;
   digest?: unknown;
   message?: unknown;
+  cause?: unknown;
+  query?: unknown;
+  params?: unknown;
 };
 
 const LEVEL_WEIGHT: Record<LogLevel, number> = {
@@ -113,7 +116,7 @@ function errorLike(error: unknown): ErrorLike {
   return (error ?? {}) as ErrorLike;
 }
 
-export function classifyError(error: unknown): ErrorCategory {
+function classifyErrorCandidate(error: unknown): ErrorCategory {
   if (error instanceof ValidationError) return "validation";
   if (
     error instanceof UnauthenticatedError ||
@@ -172,6 +175,56 @@ export function classifyError(error: unknown): ErrorCategory {
   return "unknown";
 }
 
+function errorChain(error: unknown, maxDepth = 4): unknown[] {
+  const chain: unknown[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth <= maxDepth; depth += 1) {
+    if (current === null || current === undefined) break;
+    if (chain.includes(current)) break;
+    chain.push(current);
+    current = errorLike(current).cause;
+  }
+  return chain;
+}
+
+function isDrizzleQueryError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as Record<string, unknown>;
+  return (
+    typeof candidate.query === "string" &&
+    "params" in candidate &&
+    "cause" in candidate
+  );
+}
+
+/**
+ * Drizzle wraps driver failures in a query error whose message contains the SQL
+ * text and parameters. Serialise the underlying cause instead so query data and
+ * parameter values never reach the logs.
+ */
+function unwrapDrizzleQueryError(error: unknown): unknown {
+  let current = error;
+  for (let depth = 0; depth < 4 && isDrizzleQueryError(current); depth += 1) {
+    current = errorLike(current).cause;
+  }
+  return current;
+}
+
+export function classifyError(error: unknown): ErrorCategory {
+  for (const candidate of errorChain(error)) {
+    const category = classifyErrorCandidate(candidate);
+    if (category !== "unknown") return category;
+  }
+  return "unknown";
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  const message = errorLike(error).message;
+  if (typeof message === "string") return message;
+  return typeof error === "string" ? error : "";
+}
+
 export function serializeError(
   error: unknown,
   {
@@ -182,21 +235,19 @@ export function serializeError(
   if (error === null || error === undefined) return null;
 
   const candidate = errorLike(error);
-  const isError = error instanceof Error;
-  const name =
-    stringValue(candidate.name) ?? (isError ? "Error" : "NonError");
-  const code = stringValue(candidate.code);
+  const drizzleQuery = isDrizzleQueryError(error);
+  const source = drizzleQuery ? unwrapDrizzleQueryError(error) : error;
+  const sourceCandidate = errorLike(source);
+  const name = drizzleQuery
+    ? "DrizzleQueryError"
+    : (stringValue(candidate.name) ??
+      (error instanceof Error ? "Error" : "NonError"));
+  const code = stringValue(sourceCandidate.code);
   const status =
-    numericValue(candidate.status) ?? numericValue(candidate.statusCode);
-  const digest = stringValue(candidate.digest);
-  const rawMessage =
-    isError || typeof candidate.message === "string"
-      ? error instanceof Error
-        ? error.message
-        : String(candidate.message ?? "")
-      : typeof error === "string"
-        ? error
-        : "";
+    numericValue(sourceCandidate.status) ??
+    numericValue(sourceCandidate.statusCode);
+  const digest = stringValue(sourceCandidate.digest);
+  const rawMessage = errorMessage(source);
 
   const serialized: SerializedError = {
     name,
@@ -208,8 +259,8 @@ export function serializeError(
   if (includeMessage && rawMessage) {
     serialized.message = redactSensitiveText(rawMessage).slice(0, 800);
   }
-  if (includeStack && error instanceof Error && error.stack) {
-    serialized.stack = redactSensitiveText(error.stack).slice(0, 4_000);
+  if (includeStack && source instanceof Error && source.stack) {
+    serialized.stack = redactSensitiveText(source.stack).slice(0, 4_000);
   }
   return serialized;
 }
