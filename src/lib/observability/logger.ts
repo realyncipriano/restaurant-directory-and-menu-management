@@ -325,13 +325,33 @@ function writeRecord(level: LogLevel, record: LogRecord): void {
   }
 }
 
+function writeFallback(): void {
+  try {
+    console.error(
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: "error",
+        service: "restaurant-directory",
+        event: "logging.failed",
+        message: "A log record could not be written.",
+      }),
+    );
+  } catch {
+    // Logging must never propagate a failure into application control flow.
+  }
+}
+
 export function log(
   level: LogLevel,
   event: string,
   options: LogOptions = {},
 ): void {
-  if (!isLogLevelEnabled(level)) return;
-  writeRecord(level, createLogRecord(level, event, options));
+  try {
+    if (!isLogLevelEnabled(level)) return;
+    writeRecord(level, createLogRecord(level, event, options));
+  } catch {
+    writeFallback();
+  }
 }
 
 export const logger = {

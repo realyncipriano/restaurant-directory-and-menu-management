@@ -125,6 +125,7 @@ export async function processMenuImport(
   if (claimed.length === 0) {
     throw new ConflictError("This import is already being processed.");
   }
+  let itemCount = 0;
   try {
     await db
       .update(menuImportPages)
@@ -164,6 +165,7 @@ export async function processMenuImport(
     }
 
     const result = await extractMenuItems(config, images);
+    itemCount = result.items.length;
 
     const tree = await loadMenuTree(db, menu.id);
     if (!tree) throw new NotFoundError("Target menu not found.");
@@ -268,16 +270,6 @@ export async function processMenuImport(
         })
         .where(eq(menuImportPages.importId, importId));
     });
-
-    logger.info("imports.menu_import_completed", {
-      requestId: await getRequestIdForLogging(),
-      context: {
-        importId,
-        itemCount: result.items.length,
-        pageCount: pages.length,
-        attempt: row.menuImport.attemptCount + 1,
-      },
-    });
   } catch (error) {
     if (error instanceof LostImportClaimError) {
       throw new ConflictError(
@@ -354,4 +346,17 @@ export async function processMenuImport(
       .where(eq(menuImportPages.importId, importId));
     throw new ConflictError(message);
   }
+
+  // The transaction has committed. Completion logging runs outside the
+  // failure-handling path, and logger.* is non-throwing, so a logging problem
+  // cannot turn a successfully processed import into a failed one.
+  logger.info("imports.menu_import_completed", {
+    requestId: await getRequestIdForLogging(),
+    context: {
+      importId,
+      itemCount,
+      pageCount: pages.length,
+      attempt: row.menuImport.attemptCount + 1,
+    },
+  });
 }

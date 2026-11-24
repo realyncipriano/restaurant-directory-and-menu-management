@@ -126,6 +126,45 @@ describe("structured logger", () => {
     expect(JSON.stringify(lastRecord(logSpy))).toContain("[circular]");
   });
 
+  it("emits a safe fallback instead of throwing when the writer fails", () => {
+    logSpy.mockImplementation(() => {
+      throw new Error("console unavailable");
+    });
+
+    expect(() => logger.info("test.write-failure")).not.toThrow();
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(lastRecord(errorSpy)).toMatchObject({
+      level: "error",
+      event: "logging.failed",
+    });
+  });
+
+  it("does not throw when the fallback writer also fails", () => {
+    logSpy.mockImplementation(() => {
+      throw new Error("console unavailable");
+    });
+    errorSpy.mockImplementation(() => {
+      throw new Error("error console unavailable");
+    });
+
+    expect(() => logger.info("test.total-logging-failure")).not.toThrow();
+  });
+
+  it("does not throw when log context cannot be inspected", () => {
+    const context: Record<string, unknown> = {};
+    Object.defineProperty(context, "broken", {
+      enumerable: true,
+      get() {
+        throw new Error("getter failed");
+      },
+    });
+
+    expect(() =>
+      logger.info("test.context-failure", { context }),
+    ).not.toThrow();
+    expect(lastRecord(errorSpy).event).toBe("logging.failed");
+  });
+
   it("can suppress error details while keeping classification", () => {
     const serialized = serializeError(
       new Error("secret-restaurant postgres://user:pass@host/db"),
