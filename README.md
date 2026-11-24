@@ -134,10 +134,15 @@ GitHub Actions runs `.github/workflows/ci.yml` for pull requests and pushes to
 runs:
 
 - `npm run lint`
+- `npx next typegen` (generate route types for the type-check)
 - `npm run typecheck`
 - `npm test` (unit tests)
 - `npm run test:db` (ephemeral PGlite schema tests)
 - `npm run build`
+
+`next typegen` runs before type-checking because Next.js generates route
+helpers such as `LayoutProps` into `.next/types`; without it, a clean CI
+checkout cannot type-check.
 
 The ordinary workflow does not run `npm run test:integration` and does not
 require Neon, R2, extraction-provider, or production credentials. The unit and
