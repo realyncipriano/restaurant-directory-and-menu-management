@@ -48,9 +48,12 @@ the driver, the host, the error code, or the failing query, and it does not
 include the commit field. Diagnostic detail is written to the server log as a
 redacted `health.readiness_failed` event with the correlation ID.
 
-The readiness probe is `src/server/services/health.ts`. It races a `select 1`
-against a 5-second timer and throws a controlled timeout error. A connection
-failure, authentication failure, or timeout all produce the same external 503.
+The readiness probe is `src/server/services/health.ts`. It runs `select 1` in a
+transaction with a 4-second server-side `statement_timeout`, raced against a
+5-second response deadline. The shorter statement timeout makes the database
+cancel a slow probe instead of leaving it running after the 503 is returned;
+the response deadline also covers connection acquisition. A connection failure,
+authentication failure, or timeout all produce the same external 503.
 
 ## Recommended platform configuration
 
@@ -66,8 +69,10 @@ failure, authentication failure, or timeout all produce the same external 503.
 Readiness checks are not failure-injection tests. Do not stop, restart, or
 block the production database, or disconnect a protected Preview deployment, to
 exercise the 503 path. Use unit tests and a disposable local database instead.
-`tests/unit/health.test.ts` covers the liveness, ready, timeout/error, header,
-request-ID, and redaction behaviour.
+`tests/unit/health.test.ts` covers the liveness and readiness route behaviour,
+headers, request IDs, and redaction. `tests/unit/health-service.test.ts` covers
+the readiness transaction, statement timeout, response timeout, and timer
+cleanup.
 
 ## Release verification
 

@@ -143,8 +143,10 @@ Adopt Playwright only if the team can provide all of the following:
 Readiness and proxy 503 behaviour must not be exercised by disrupting
 production or a protected Preview database. Use:
 
-- `tests/unit/health.test.ts` for readiness success, failure, timeout, headers,
-  and redaction;
+- `tests/unit/health.test.ts` for readiness route success, failure, headers, and
+  redaction;
+- `tests/unit/health-service.test.ts` for the readiness transaction, statement
+  timeout, response timeout, and timer cleanup;
 - `tests/unit/proxy.test.ts` for existence-check failures and 503 responses;
 - a disposable local or explicitly authorized database if an end-to-end outage
   check is needed.
