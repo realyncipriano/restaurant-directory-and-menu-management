@@ -6,6 +6,7 @@ import { getDb } from "@/db/client";
 import { formStateFromError } from "@/lib/action-error";
 import { formString, type FormState } from "@/lib/action-state";
 import { getActionUserId } from "@/lib/auth/action-user";
+import { withRequestContext } from "@/lib/observability/server-context";
 import { revalidateImportPaths } from "@/lib/revalidate";
 import {
   acceptAllImportItems,
@@ -102,7 +103,9 @@ export async function processImportAction(
   const importId = formString(formData, "importId");
 
   try {
-    await processMenuImport(getDb(), actorId, importId);
+    await withRequestContext(() =>
+      processMenuImport(getDb(), actorId, importId),
+    );
   } catch (error) {
     return formStateFromError(error);
   }

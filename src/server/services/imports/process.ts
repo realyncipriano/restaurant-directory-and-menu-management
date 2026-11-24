@@ -19,6 +19,8 @@ import {
   ValidationError,
 } from "@/lib/errors";
 import { extractMenuItems } from "@/lib/extraction/openai";
+import { logger } from "@/lib/observability/logger";
+import { getRequestIdForLogging } from "@/lib/observability/server-context";
 import { buildChangeType, normalizeName } from "../import-rules";
 import { requireDraftEditable } from "../menu-access";
 import { loadMenuTree, type MenuTreeItem } from "../menu-tree";
@@ -266,6 +268,16 @@ export async function processMenuImport(
         })
         .where(eq(menuImportPages.importId, importId));
     });
+
+    logger.info("imports.menu_import_completed", {
+      requestId: await getRequestIdForLogging(),
+      context: {
+        importId,
+        itemCount: result.items.length,
+        pageCount: pages.length,
+        attempt: row.menuImport.attemptCount + 1,
+      },
+    });
   } catch (error) {
     if (error instanceof LostImportClaimError) {
       throw new ConflictError(
@@ -277,7 +289,15 @@ export async function processMenuImport(
       error instanceof ValidationError
         ? error.message
         : "Menu extraction failed. Check the provider configuration and try again.";
-    console.error("[imports] Menu import failed.", importId, error);
+    const requestId = await getRequestIdForLogging();
+    logger.error("imports.menu_import_failed", {
+      requestId,
+      error,
+      context: {
+        importId,
+        attempt: row.menuImport.attemptCount + 1,
+      },
+    });
 
     const [owned] = await db
       .select({ id: menuImports.id })
@@ -303,10 +323,11 @@ export async function processMenuImport(
         .where(eq(menuImportItems.importId, importId));
     } catch (cleanupError) {
       cleanupIncomplete = true;
-      console.error(
-        `[imports] Could not clear staged items for failed import ${importId}. Original failure: ${message}`,
-        cleanupError,
-      );
+      logger.error("imports.failed_import_cleanup_failed", {
+        requestId,
+        error: cleanupError,
+        context: { importId, originalFailureLogged: true },
+      });
     }
 
     await db

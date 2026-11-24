@@ -13,6 +13,8 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { getR2Config } from "@/lib/env";
 import { ConflictError } from "@/lib/errors";
+import { logger } from "@/lib/observability/logger";
+import { getRequestIdForLogging } from "@/lib/observability/server-context";
 
 let cachedClient: { endpoint: string; client: S3Client } | null = null;
 
@@ -120,7 +122,11 @@ export async function deleteObject(
       }),
     );
   } catch (error) {
-    console.error("[r2] Failed to delete an object.", error);
+    logger.error("storage.object_delete_failed", {
+      requestId: await getRequestIdForLogging(),
+      error,
+      context: { visibility: "public" },
+    });
   }
 }
 
@@ -218,7 +224,11 @@ export async function deletePrivateObject(
       }),
     );
   } catch (error) {
-    console.error("[r2] Failed to delete a private object.", error);
+    logger.error("storage.private_object_delete_failed", {
+      requestId: await getRequestIdForLogging(),
+      error,
+      context: { visibility: "private" },
+    });
   }
 }
 

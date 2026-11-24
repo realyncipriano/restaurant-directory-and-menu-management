@@ -60,6 +60,12 @@ const nextConfig: NextConfig = {
     return [
       { source: "/(.*)", headers },
       {
+        // Health checks are machine-readable endpoints. Keep this rule after
+        // the global rule so the stricter referrer policy is the effective one.
+        source: "/api/health/:path*",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
+      {
         source: "/activate",
         headers: [
           { key: "Referrer-Policy", value: "no-referrer" },

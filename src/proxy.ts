@@ -2,6 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getDb } from "@/db/client";
 import { SESSION_COOKIE } from "@/lib/auth/constants";
+import { logger } from "@/lib/observability/logger";
+import { runWithRequestContext } from "@/lib/observability/request-context";
+import {
+  REQUEST_ID_HEADER,
+  requestIdFromHeaders,
+} from "@/lib/observability/request-id";
 import {
   publicMenuExists,
   publicRestaurantExists,
@@ -118,30 +124,58 @@ function isDashboardPath(pathname: string): boolean {
   );
 }
 
-function redirectToLogin(request: NextRequest): NextResponse {
+function withRequestId<T extends Response>(
+  response: T,
+  requestId: string,
+): T {
+  response.headers.set(REQUEST_ID_HEADER, requestId);
+  return response;
+}
+
+function nextWithRequestId(
+  request: NextRequest,
+  requestId: string,
+): NextResponse {
+  const forwardedHeaders = new Headers(request.headers);
+  forwardedHeaders.set(REQUEST_ID_HEADER, requestId);
+  const response = NextResponse.next({
+    request: { headers: forwardedHeaders },
+  });
+  return withRequestId(response, requestId);
+}
+
+function redirectToLogin(
+  request: NextRequest,
+  requestId: string,
+): NextResponse {
   const url = request.nextUrl.clone();
   url.pathname = "/login";
   url.search = "";
   url.searchParams.set("next", request.nextUrl.pathname);
-  return NextResponse.redirect(url);
+  return withRequestId(NextResponse.redirect(url), requestId);
 }
 
-function notFoundResponse(method: string): Response {
-  return new Response(method === "HEAD" ? null : NOT_FOUND_HTML, {
-    status: 404,
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
-      "X-Robots-Tag": "noindex",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
+function notFoundResponse(method: string, requestId: string): Response {
+  return withRequestId(
+    new Response(method === "HEAD" ? null : NOT_FOUND_HTML, {
+      status: 404,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex",
+        "X-Content-Type-Options": "nosniff",
+      },
+    }),
+    requestId,
+  );
 }
 
-function serviceUnavailableResponse(method: string): Response {
-  return new Response(
-    method === "HEAD" ? null : SERVICE_UNAVAILABLE_HTML,
-    {
+function serviceUnavailableResponse(
+  method: string,
+  requestId: string,
+): Response {
+  return withRequestId(
+    new Response(method === "HEAD" ? null : SERVICE_UNAVAILABLE_HTML, {
       status: 503,
       headers: {
         "Content-Type": "text/html; charset=utf-8",
@@ -150,24 +184,25 @@ function serviceUnavailableResponse(method: string): Response {
         "X-Robots-Tag": "noindex",
         "X-Content-Type-Options": "nosniff",
       },
-    },
+    }),
+    requestId,
   );
 }
 
 function logExistenceFailure(
   kind: "restaurant" | "menu",
   error: unknown,
+  requestId: string,
 ): void {
-  const candidate = error as { name?: unknown; code?: unknown } | null;
-  const name =
-    typeof candidate?.name === "string" ? candidate.name : "Error";
-  const code =
-    typeof candidate?.code === "string" ? candidate.code : "unknown";
-
-  // Deliberately omit the URL, slug, message, stack, and query text.
-  console.error(
-    `[proxy] Public ${kind} existence check failed (name=${name}, code=${code}); returning 503.`,
-  );
+  // Deliberately omit the URL, slug, message, stack, and query text. Name,
+  // code, and category are enough to distinguish a database outage from a
+  // programming error without leaking connection details.
+  logger.error("proxy.public_existence_check_failed", {
+    requestId,
+    error,
+    includeErrorDetails: false,
+    context: { kind, responseStatus: 503 },
+  });
 }
 
 function isNonDocumentRequest(request: NextRequest): boolean {
@@ -175,24 +210,27 @@ function isNonDocumentRequest(request: NextRequest): boolean {
   return destination !== null && destination !== "document";
 }
 
-export async function proxy(request: NextRequest) {
+async function handleProxy(
+  request: NextRequest,
+  requestId: string,
+): Promise<Response> {
   const { pathname } = request.nextUrl;
 
   if (isDashboardPath(pathname)) {
     const token = request.cookies.get(SESSION_COOKIE)?.value;
     if (!token) {
-      return redirectToLogin(request);
+      return redirectToLogin(request, requestId);
     }
 
-    return NextResponse.next();
+    return nextWithRequestId(request, requestId);
   }
 
   if (request.method !== "GET" && request.method !== "HEAD") {
-    return NextResponse.next();
+    return nextWithRequestId(request, requestId);
   }
 
   if (isNonDocumentRequest(request)) {
-    return NextResponse.next();
+    return nextWithRequestId(request, requestId);
   }
 
   const menuMatch = MENU_PATH_PATTERN.exec(pathname);
@@ -201,7 +239,7 @@ export async function proxy(request: NextRequest) {
     : RESTAURANT_PATH_PATTERN.exec(pathname);
 
   if (!menuMatch && !restaurantMatch) {
-    return NextResponse.next();
+    return nextWithRequestId(request, requestId);
   }
 
   if (menuMatch) {
@@ -214,7 +252,7 @@ export async function proxy(request: NextRequest) {
       !SLUG_PATTERN.test(restaurantSlug) ||
       !SLUG_PATTERN.test(menuSlug)
     ) {
-      return notFoundResponse(request.method);
+      return notFoundResponse(request.method, requestId);
     }
 
     let exists: boolean;
@@ -230,20 +268,20 @@ export async function proxy(request: NextRequest) {
       // 200 error shell. This catch is intentionally scoped to the existence
       // check; connection failures can surface as generic errors, so treating
       // any exception here as unavailable is safer than guessing.
-      logExistenceFailure("menu", error);
-      return serviceUnavailableResponse(request.method);
+      logExistenceFailure("menu", error, requestId);
+      return serviceUnavailableResponse(request.method, requestId);
     }
 
     if (!exists) {
-      return notFoundResponse(request.method);
+      return notFoundResponse(request.method, requestId);
     }
 
-    return NextResponse.next();
+    return nextWithRequestId(request, requestId);
   }
 
   const restaurantSlug = restaurantMatch?.[1];
   if (!restaurantSlug || !SLUG_PATTERN.test(restaurantSlug)) {
-    return notFoundResponse(request.method);
+    return notFoundResponse(request.method, requestId);
   }
 
   let exists: boolean;
@@ -251,20 +289,39 @@ export async function proxy(request: NextRequest) {
     exists = await publicRestaurantExists(getDb(), restaurantSlug);
   } catch (error) {
     // See the menu existence-check note above.
-    logExistenceFailure("restaurant", error);
-    return serviceUnavailableResponse(request.method);
+    logExistenceFailure("restaurant", error, requestId);
+    return serviceUnavailableResponse(request.method, requestId);
   }
 
   if (!exists) {
-    return notFoundResponse(request.method);
+    return notFoundResponse(request.method, requestId);
   }
 
-  return NextResponse.next();
+  return nextWithRequestId(request, requestId);
+}
+
+export async function proxy(request: NextRequest): Promise<Response> {
+  const requestId = requestIdFromHeaders(request.headers);
+
+  return runWithRequestContext(
+    {
+      requestId,
+      method: request.method,
+      route: request.nextUrl.pathname,
+    },
+    () => handleProxy(request, requestId),
+  );
 }
 
 export const config = {
   matcher: [
+    "/",
+    "/restaurants",
+    "/login",
+    "/activate",
     "/dashboard/:path*",
+    "/api/health",
+    "/api/health/ready",
     {
       source: "/restaurants/:slug",
       missing: [

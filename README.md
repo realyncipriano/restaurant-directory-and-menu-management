@@ -127,6 +127,14 @@ npm run verify
 database. Run `npm run test:integration` separately, and only after configuring
 the safeguards in [Database safety](#database-safety).
 
+Public smoke checks are read-only HTTP checks and are not part of `verify`
+because they need a running deployment:
+
+```bash
+npm run smoke:public -- --base http://localhost:3000 \
+  --restaurant your-restaurant-slug --menu your-menu-slug
+```
+
 ## Continuous integration
 
 GitHub Actions runs `.github/workflows/ci.yml` for pull requests and pushes to
@@ -336,6 +344,24 @@ log.
 Published menus are versioned. Editing a published menu creates a draft
 revision; the live menu changes only when an authorized user explicitly
 publishes the revision. Price changes are recorded in the change log.
+
+## Observability and health
+
+Server code emits structured JSON logs with levels, stable event names,
+redacted error details, and request IDs. Request IDs are generated or accepted
+by the proxy, forwarded to downstream handlers, returned in the
+`x-request-id` response header, and carried through server actions and import
+processing. They are correlation values only, never authentication.
+
+- `GET /api/health` is a liveness check and does not touch the database.
+- `GET /api/health/ready` performs a minimal `select 1` with a 5-second timeout
+  and returns a controlled `503` when the database is unavailable.
+- Both endpoints return `no-store` and do not disclose dependency or
+  infrastructure details.
+
+See [Observability documentation](docs/observability/README.md) for logging
+fields, redaction rules, health-check operations, the provider-neutral
+error-tracking decision, and the public/authenticated smoke-testing policy.
 
 ## Deployment
 

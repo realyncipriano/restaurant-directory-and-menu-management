@@ -25,6 +25,15 @@ describe("proxy matcher", () => {
     expect(matches("/dashboard/restaurants", { rsc: "1" })).toBe(true);
   });
 
+  it("matches entry points that should receive a correlation ID", () => {
+    expect(matches("/")).toBe(true);
+    expect(matches("/restaurants")).toBe(true);
+    expect(matches("/login")).toBe(true);
+    expect(matches("/activate")).toBe(true);
+    expect(matches("/api/health")).toBe(true);
+    expect(matches("/api/health/ready")).toBe(true);
+  });
+
   it("matches direct restaurant document requests", () => {
     expect(matches("/restaurants/k-cafe")).toBe(true);
   });
@@ -48,8 +57,7 @@ describe("proxy matcher", () => {
   );
 
   it("does not match unrelated or non-document paths", () => {
-    expect(matches("/")).toBe(false);
-    expect(matches("/restaurants")).toBe(false);
+    expect(matches("/no-such-page")).toBe(false);
     expect(matches("/restaurants/k-cafe/menus/lunch/extra")).toBe(false);
     expect(matches("/api/restaurants/k-cafe")).toBe(false);
     expect(matches("/_next/static/chunk.js")).toBe(false);

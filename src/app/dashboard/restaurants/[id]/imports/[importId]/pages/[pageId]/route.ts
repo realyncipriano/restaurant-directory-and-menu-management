@@ -8,11 +8,13 @@ import {
   AppError,
   NotFoundError,
 } from "@/lib/errors";
+import { logger } from "@/lib/observability/logger";
+import { requestIdFromHeaders } from "@/lib/observability/request-id";
 import { getMenuImport } from "@/server/services/imports";
 import { getSignedPrivateObjectUrl } from "@/server/services/storage";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: {
     params: Promise<{ id: string; importId: string; pageId: string }>;
   },
@@ -57,6 +59,11 @@ export async function GET(
         { status: error.status },
       );
     }
+    logger.error("imports.page_image_failed", {
+      requestId: requestIdFromHeaders(request.headers),
+      error,
+      context: { route: "import-page-image" },
+    });
     return NextResponse.json(
       { error: "The page image could not be loaded." },
       { status: 500 },

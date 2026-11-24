@@ -1,3 +1,7 @@
+import { logger } from "@/lib/observability/logger";
+import { redactSensitiveText } from "@/lib/observability/redact";
+import { getRequestId } from "@/lib/observability/request-context";
+
 type ErrorEmitter = {
   on?: (event: "error", listener: (error: unknown) => void) => unknown;
 };
@@ -11,10 +15,7 @@ export function sanitizeDbError(error: unknown): string {
         : "";
 
   const raw = message || "Database operation failed (details suppressed).";
-  return raw
-    .replace(/postgres(?:ql)?:\/\/[^\s"'<>]+/gi, "[redacted-connection-string]")
-    .replace(/(password|pwd|secret|token)=([^&\s]+)/gi, "$1=[redacted]")
-    .slice(0, 600);
+  return redactSensitiveText(raw).slice(0, 600);
 }
 
 export function isUniqueViolation(
@@ -56,8 +57,10 @@ export function attachPoolErrorHandler(
   context: string,
 ): void {
   pool.on?.("error", (error) => {
-    console.error(
-      `[${context}] Database pool error: ${sanitizeDbError(error)}`,
-    );
+    logger.error("db.pool_error", {
+      requestId: getRequestId(),
+      error,
+      context: { pool: context },
+    });
   });
 }
