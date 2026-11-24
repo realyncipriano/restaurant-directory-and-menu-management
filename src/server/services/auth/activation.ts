@@ -4,11 +4,16 @@ import type { DbClient } from "@/db/client";
 import { users } from "@/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 import { createSession, revokeAllUserSessions } from "@/lib/auth/session";
-import { ConflictError, NotFoundError } from "@/lib/errors";
+import {
+  ConflictError,
+  MfaChallengeRequiredError,
+  NotFoundError,
+} from "@/lib/errors";
 import { activateSchema } from "@/lib/validation/auth";
 import { parseOrThrow } from "@/lib/validation/parse";
 import { writeAuditLog } from "../audit";
 import { enforceActivationRateLimit } from "./limits";
+import { issueMfaChallenge } from "./mfa";
 import {
   assertStrongPassword,
   publicUser,
@@ -75,7 +80,7 @@ export async function activateAccount(
     userAgent: input.userAgent,
   };
 
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     const marked = await markTokenUsed(tx, context.tokenId, now);
     if (!marked) {
       throw new ConflictError("This invitation has already been used.");
@@ -103,7 +108,6 @@ export async function activateAccount(
 
     await invalidateUserTokens(tx, context.userId, now);
     await revokeAllUserSessions(tx, context.userId, now);
-    const session = await createSession(tx, updated.id, sessionMeta, now);
 
     await writeAuditLog(tx, {
       actor: { id: updated.id, email: updated.email },
@@ -113,6 +117,30 @@ export async function activateAccount(
       details: { role: updated.role },
     });
 
-    return { user: publicUser(updated), session };
+    if (updated.mfaEnabledAt) {
+      return {
+        user: publicUser(updated),
+        session: null,
+        mfaRequired: true as const,
+      };
+    }
+
+    const session = await createSession(tx, updated.id, sessionMeta, now);
+
+    return {
+      user: publicUser(updated),
+      session,
+      mfaRequired: false as const,
+    };
   });
+
+  if (outcome.mfaRequired) {
+    const challenge = await issueMfaChallenge(db, outcome.user.id, {
+      now,
+      reason: "account_activation",
+    });
+    throw new MfaChallengeRequiredError(challenge);
+  }
+
+  return { user: outcome.user, session: outcome.session };
 }

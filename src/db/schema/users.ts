@@ -28,6 +28,9 @@ export const users = pgTable(
       .notNull()
       .default("invited"),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    mfaEnabledAt: timestamp("mfa_enabled_at", { withTimezone: true }),
+    mfaTotpSecret: text("mfa_totp_secret"),
+    mfaLastUsedStep: integer("mfa_last_used_step"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -52,6 +55,7 @@ export const sessions = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    steppedUpAt: timestamp("stepped_up_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     ipHash: text("ip_hash"),
     userAgent: text("user_agent"),
@@ -63,6 +67,46 @@ export const sessions = pgTable(
     uniqueIndex("sessions_token_hash_unique").on(table.tokenHash),
     index("sessions_user_idx").on(table.userId),
     index("sessions_expires_idx").on(table.expiresAt),
+  ],
+);
+
+export const mfaRecoveryCodes = pgTable(
+  "mfa_recovery_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash").notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("mfa_recovery_codes_hash_unique").on(table.codeHash),
+    index("mfa_recovery_codes_user_idx").on(table.userId),
+  ],
+);
+
+export const mfaChallenges = pgTable(
+  "mfa_challenges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("mfa_challenges_token_hash_unique").on(table.tokenHash),
+    index("mfa_challenges_user_idx").on(table.userId),
+    index("mfa_challenges_expires_idx").on(table.expiresAt),
   ],
 );
 

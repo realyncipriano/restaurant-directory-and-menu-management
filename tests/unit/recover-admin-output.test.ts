@@ -27,5 +27,17 @@ describe("administrator recovery CLI output", () => {
     expect(lines[0]).toContain("admin@example.com");
     expect(lines.at(-1)).toMatch(/secure channel/);
     expect(lines.at(-1)).toMatch(/single-use/);
+    expect(lines.join(" ")).not.toMatch(/Multi-factor authentication was disabled/);
+  });
+
+  it("warns when recovery also resets MFA", () => {
+    const { lines } = recoveryOutputLines({
+      email: "admin@example.com",
+      url: URL,
+      mfaReset: true,
+    });
+
+    expect(lines.join(" ")).toMatch(/Multi-factor authentication was disabled/);
+    expect(lines.filter((line) => line === URL)).toHaveLength(1);
   });
 });

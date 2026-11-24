@@ -12,6 +12,7 @@ import {
 import { createSession, revokeAllUserSessions } from "@/lib/auth/session";
 import {
   ConflictError,
+  MfaChallengeRequiredError,
   NotFoundError,
   RateLimitedError,
   UnauthenticatedError,
@@ -25,6 +26,7 @@ import { parseOrThrow } from "@/lib/validation/parse";
 import { writeAuditLog } from "../audit";
 import { requireActiveActor } from "./actors";
 import { enforceActivationRateLimit } from "./limits";
+import { issueMfaChallenge } from "./mfa";
 import {
   assertStrongPassword,
   publicUser,
@@ -71,7 +73,7 @@ export async function resetPasswordWithToken(
     userAgent: input.userAgent,
   };
 
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     const marked = await markTokenUsed(tx, context.tokenId, now);
     if (!marked) {
       throw new ConflictError("This reset link has already been used.");
@@ -91,7 +93,6 @@ export async function resetPasswordWithToken(
 
     await invalidateUserTokens(tx, context.userId, now);
     await revokeAllUserSessions(tx, context.userId, now);
-    const session = await createSession(tx, updated.id, sessionMeta, now);
 
     await writeAuditLog(tx, {
       actor: { id: updated.id, email: updated.email },
@@ -100,8 +101,32 @@ export async function resetPasswordWithToken(
       entityId: updated.id,
     });
 
-    return { user: publicUser(updated), session };
+    if (updated.mfaEnabledAt) {
+      return {
+        user: publicUser(updated),
+        session: null,
+        mfaRequired: true as const,
+      };
+    }
+
+    const session = await createSession(tx, updated.id, sessionMeta, now);
+
+    return {
+      user: publicUser(updated),
+      session,
+      mfaRequired: false as const,
+    };
   });
+
+  if (outcome.mfaRequired) {
+    const challenge = await issueMfaChallenge(db, outcome.user.id, {
+      now,
+      reason: "password_reset",
+    });
+    throw new MfaChallengeRequiredError(challenge);
+  }
+
+  return { user: outcome.user, session: outcome.session };
 }
 
 export async function changePassword(

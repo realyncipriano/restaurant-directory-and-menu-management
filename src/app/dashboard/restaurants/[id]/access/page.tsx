@@ -15,7 +15,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Notice } from "@/components/ui/notice";
 import { PageHeader } from "@/components/ui/page-header";
-import { requireAdminUser } from "@/lib/auth/guards";
+import { requireAdminUser, requireFreshStepUp } from "@/lib/auth/guards";
 import { NotFoundError } from "@/lib/errors";
 import {
   getRestaurantDetail,
@@ -58,8 +58,11 @@ export default async function RestaurantAccessPage({
     error?: string | string[];
   }>;
 }) {
-  const admin = await requireAdminUser();
   const { id } = await params;
+  const admin = requireFreshStepUp(
+    await requireAdminUser(),
+    `/dashboard/restaurants/${id}/access`,
+  );
   const query = await searchParams;
 
   let detail;

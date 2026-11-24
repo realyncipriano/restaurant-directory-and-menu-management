@@ -85,6 +85,30 @@ export function getAppName(): string {
   return clean(process.env.NEXT_PUBLIC_APP_NAME) ?? "Menu Directory";
 }
 
+/**
+ * Passphrase for encrypting TOTP secrets and peppering recovery-code hashes.
+ * A dedicated key is recommended so rotating AUTH_SECRET does not lock out
+ * accounts with MFA enabled. The fallback keeps local/test setup simple.
+ */
+export function getMfaEncryptionKey(): string {
+  const dedicated = clean(process.env.MFA_ENCRYPTION_KEY);
+  if (dedicated) {
+    if (dedicated.length < 32) {
+      throw new Error(
+        "MFA_ENCRYPTION_KEY must be at least 32 characters. Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('base64url'))\"",
+      );
+    }
+    return dedicated;
+  }
+  return `mfa:${getAuthSecret()}`;
+}
+
+export function isMfaRequiredForAdmins(): boolean {
+  return /^(?:1|true|yes)$/i.test(
+    clean(process.env.MFA_REQUIRED_FOR_ADMINS) ?? "",
+  );
+}
+
 export function getR2Config(): R2Config | null {
   const accountId = clean(process.env.R2_ACCOUNT_ID);
   const accessKeyId = clean(process.env.R2_ACCESS_KEY_ID);

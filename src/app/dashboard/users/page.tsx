@@ -10,7 +10,7 @@ import { buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import { PageHeader } from "@/components/ui/page-header";
-import { requireAdminUser } from "@/lib/auth/guards";
+import { requireAdminUser, requireFreshStepUp } from "@/lib/auth/guards";
 import { listUsers } from "@/server/services/auth";
 import {
   deactivateUserAction,
@@ -129,7 +129,10 @@ export default async function UsersPage({
 }: {
   searchParams: Promise<{ notice?: string | string[]; error?: string | string[] }>;
 }) {
-  const admin = await requireAdminUser();
+  const admin = requireFreshStepUp(
+    await requireAdminUser(),
+    "/dashboard/users",
+  );
   const params = await searchParams;
   const users = await listUsers(getDb(), admin.id);
 

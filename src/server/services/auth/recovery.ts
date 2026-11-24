@@ -1,7 +1,13 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { DbClient } from "@/db/client";
-import { authTokens, users } from "@/db/schema";
+import {
+  authTokens,
+  mfaChallenges,
+  mfaRecoveryCodes,
+  sessions,
+  users,
+} from "@/db/schema";
 import {
   generateSecureToken,
   hashTokenWithSecret,
@@ -52,6 +58,7 @@ export async function createAdminRecoveryLink(
     appUrl: string;
     authSecret: string;
     allowDevelopmentUrl?: boolean;
+    disableMfa?: boolean;
     now?: Date;
   },
 ): Promise<AdminRecoveryLink> {
@@ -88,6 +95,41 @@ export async function createAdminRecoveryLink(
       throw new ConflictError(
         "Recovery requires an existing active administrator account with a password.",
       );
+    }
+
+    if (input.disableMfa && target.mfaEnabledAt) {
+      await tx
+        .update(users)
+        .set({
+          mfaEnabledAt: null,
+          mfaTotpSecret: null,
+          mfaLastUsedStep: null,
+          updatedAt: now,
+        })
+        .where(eq(users.id, target.id));
+      await tx
+        .delete(mfaRecoveryCodes)
+        .where(eq(mfaRecoveryCodes.userId, target.id));
+      await tx
+        .delete(mfaChallenges)
+        .where(eq(mfaChallenges.userId, target.id));
+      await tx
+        .update(sessions)
+        .set({ revokedAt: now })
+        .where(
+          and(
+            eq(sessions.userId, target.id),
+            isNull(sessions.revokedAt),
+          ),
+        );
+
+      await writeAuditLog(tx, {
+        actor: null,
+        action: "admin_recovery_mfa_reset",
+        entityType: "user",
+        entityId: target.id,
+        details: { email: target.email, source: "cli" },
+      });
     }
 
     await tx

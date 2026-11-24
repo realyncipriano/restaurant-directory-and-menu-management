@@ -29,6 +29,8 @@ export async function resetTestDb(handle: EphemeralDb): Promise<void> {
       menus,
       restaurant_user_permissions,
       restaurants,
+      mfa_challenges,
+      mfa_recovery_codes,
       auth_tokens,
       sessions,
       rate_limits,

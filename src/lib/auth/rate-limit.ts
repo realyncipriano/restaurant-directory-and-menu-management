@@ -11,6 +11,7 @@ export type RateLimitResult = {
   allowed: boolean;
   remaining: number;
   retryAfterSeconds: number;
+  count: number;
 };
 
 export async function consumeRateLimit(
@@ -52,6 +53,7 @@ export async function consumeRateLimit(
       allowed: false,
       remaining: 0,
       retryAfterSeconds: options.windowSeconds,
+      count: 0,
     };
   }
 
@@ -65,6 +67,7 @@ export async function consumeRateLimit(
     allowed,
     remaining: Math.max(0, options.limit - row.count),
     retryAfterSeconds,
+    count: row.count,
   };
 }
 
