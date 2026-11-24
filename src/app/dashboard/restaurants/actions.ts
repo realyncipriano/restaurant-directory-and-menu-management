@@ -5,7 +5,10 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/db/client";
 import { formStateFromError } from "@/lib/action-error";
 import { formString, type FormState } from "@/lib/action-state";
-import { getActionUserId } from "@/lib/auth/action-user";
+import {
+  getActionAdminIdWithStepUp,
+  getActionUserId,
+} from "@/lib/auth/action-user";
 import {
   revalidateRestaurantAccess,
   revalidateRestaurantDetail,
@@ -121,14 +124,16 @@ export async function activateRestaurantAction(
 export async function setPermissionAction(
   formData: FormData,
 ): Promise<void> {
-  const actorId = await getActionUserId();
-  if (!actorId) redirect("/login");
-
   const restaurantId = formString(formData, "restaurantId");
+  const adminId = await getActionAdminIdWithStepUp(
+    `/dashboard/restaurants/${restaurantId}/access`,
+  );
+  if (!adminId) redirect("/dashboard");
+
   const userId = formString(formData, "userId");
 
   try {
-    await setRestaurantPermission(getDb(), actorId, restaurantId, userId, {
+    await setRestaurantPermission(getDb(), adminId, restaurantId, userId, {
       canEditMenu: formData.get("canEditMenu") === "on",
       canPublishMenu: formData.get("canPublishMenu") === "on",
       canManageRestaurant: formData.get("canManageRestaurant") === "on",
@@ -144,16 +149,18 @@ export async function setPermissionAction(
 export async function removePermissionAction(
   formData: FormData,
 ): Promise<void> {
-  const actorId = await getActionUserId();
-  if (!actorId) redirect("/login");
-
   const restaurantId = formString(formData, "restaurantId");
+  const adminId = await getActionAdminIdWithStepUp(
+    `/dashboard/restaurants/${restaurantId}/access`,
+  );
+  if (!adminId) redirect("/dashboard");
+
   const userId = formString(formData, "userId");
 
   try {
     await removeRestaurantPermission(
       getDb(),
-      actorId,
+      adminId,
       restaurantId,
       userId,
     );

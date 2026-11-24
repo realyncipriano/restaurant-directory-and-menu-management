@@ -23,6 +23,10 @@ export {
   changePassword,
   resetPasswordWithToken,
 } from "./auth/passwords";
+export {
+  verifyStepUp,
+  type StepUpMethod,
+} from "./auth/step-up";
 export type { AuthResult, PublicUser } from "./auth/shared";
 export {
   listUserSessions,

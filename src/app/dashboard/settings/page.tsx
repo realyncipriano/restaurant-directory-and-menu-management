@@ -7,7 +7,7 @@ import { SettingsForm } from "@/components/settings/settings-form";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import { PageHeader } from "@/components/ui/page-header";
-import { requireAdminUser } from "@/lib/auth/guards";
+import { requireAdminUser, requireFreshStepUp } from "@/lib/auth/guards";
 import {
   defaultAppSettings,
   getAppSettings,
@@ -23,7 +23,10 @@ export default async function AppSettingsPage({
 }: {
   searchParams: Promise<{ notice?: string | string[] }>;
 }) {
-  const admin = await requireAdminUser();
+  const admin = requireFreshStepUp(
+    await requireAdminUser(),
+    "/dashboard/settings",
+  );
   const query = await searchParams;
   const settings = await getAppSettings(getDb());
   const defaults = defaultAppSettings();

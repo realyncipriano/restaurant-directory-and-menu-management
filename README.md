@@ -298,11 +298,21 @@ administrator pages and admin server actions are blocked until enrollment
 finishes. Enable enforcement only after every administrator has enrolled.
 MFA remains optional for authorized users.
 
+Administrator operations that change access or site configuration require a
+recent identity check. The users page, app settings, and restaurant access
+pages redirect to `/dashboard/step-up` when the current session has not been
+verified in the last ten minutes. The check requires the current password and,
+for MFA-enabled accounts, a current authenticator or recovery code. Step-up
+state is stored on the session, cannot be transferred to another session, and
+is re-checked by the matching server actions. Successful verification unlocks
+those tools for ten minutes; MFA recovery codes used here are consumed.
+
 Authentication events are audited without credentials, tokens, or TOTP
 secrets: `login_failed`, `login_rate_limited`, `mfa_challenge_issued`,
 `mfa_challenge_succeeded`, `mfa_challenge_failed`, `mfa_rate_limited`,
-`mfa_recovery_code_used`, `mfa_enabled`, `mfa_disabled`, `user_logout`,
-`session_revoked`, and `sessions_revoked_all`, among others.
+`mfa_recovery_code_used`, `mfa_enabled`, `mfa_disabled`, `step_up_succeeded`,
+`step_up_failed`, `step_up_rate_limited`, `user_logout`, `session_revoked`,
+and `sessions_revoked_all`, among others.
 
 ### Sole-administrator recovery
 

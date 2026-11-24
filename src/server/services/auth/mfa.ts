@@ -169,7 +169,7 @@ async function remainingRecoveryCodes(
   return row?.count ?? 0;
 }
 
-async function consumeSecondFactor(
+export async function consumeSecondFactor(
   tx: DbExecutor,
   user: UserRow,
   code: string,

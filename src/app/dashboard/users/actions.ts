@@ -14,7 +14,7 @@ import {
   reactivateErrorCode,
   roleErrorCode,
 } from "@/lib/admin-user-notices";
-import { getActionAdminId } from "@/lib/auth/action-user";
+import { getActionAdminIdWithStepUp } from "@/lib/auth/action-user";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
 import { normalizeUuid } from "@/lib/validation/ids";
 import {
@@ -29,7 +29,7 @@ export async function createInviteAction(
   _prevState: InviteFormState,
   formData: FormData,
 ): Promise<InviteFormState> {
-  const adminId = await getActionAdminId();
+  const adminId = await getActionAdminIdWithStepUp("/dashboard/users");
   if (!adminId) {
     return { error: "You do not have permission to invite users." };
   }
@@ -55,7 +55,7 @@ export async function createResetLinkAction(
   _prevState: InviteFormState,
   formData: FormData,
 ): Promise<InviteFormState> {
-  const adminId = await getActionAdminId();
+  const adminId = await getActionAdminIdWithStepUp("/dashboard/users");
   if (!adminId) {
     return { error: "You do not have permission to reset passwords." };
   }
@@ -90,7 +90,7 @@ function normalizedUserId(formData: FormData): string {
 export async function setUserRoleAction(
   formData: FormData,
 ): Promise<void> {
-  const adminId = await getActionAdminId();
+  const adminId = await getActionAdminIdWithStepUp("/dashboard/users");
   if (!adminId) redirect("/dashboard");
 
   const userId = normalizedUserId(formData);
@@ -129,7 +129,7 @@ export async function setUserRoleAction(
 export async function deactivateUserAction(
   formData: FormData,
 ): Promise<void> {
-  const adminId = await getActionAdminId();
+  const adminId = await getActionAdminIdWithStepUp("/dashboard/users");
   if (!adminId) redirect("/dashboard");
 
   const userId = normalizedUserId(formData);
@@ -161,7 +161,7 @@ export async function deactivateUserAction(
 export async function reactivateUserAction(
   formData: FormData,
 ): Promise<void> {
-  const adminId = await getActionAdminId();
+  const adminId = await getActionAdminIdWithStepUp("/dashboard/users");
   if (!adminId) redirect("/dashboard");
 
   const userId = normalizedUserId(formData);

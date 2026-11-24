@@ -23,6 +23,7 @@ export type SessionUser = {
   accountStatus: "invited" | "active" | "deactivated";
   mfaEnabled: boolean;
   sessionId: string;
+  steppedUpAt: Date | null;
 };
 
 export type CreatedSession = {
@@ -69,6 +70,7 @@ export async function getSessionUserByToken(
       sessionId: sessions.id,
       createdAt: sessions.createdAt,
       lastUsedAt: sessions.lastUsedAt,
+      steppedUpAt: sessions.steppedUpAt,
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
@@ -127,6 +129,7 @@ export async function getSessionUserByToken(
     accountStatus: row.accountStatus,
     mfaEnabled: row.mfaEnabledAt !== null,
     sessionId: row.sessionId,
+    steppedUpAt: row.steppedUpAt,
   };
 }
 
