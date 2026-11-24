@@ -388,6 +388,19 @@ Audit rows and settings are written transactionally with the action that caused
 them. No secret (passwords, tokens, raw IP addresses) is ever stored in the audit
 log.
 
+### Security headers and CSP
+
+`next.config.ts` sends HSTS in production, `nosniff`, frame denial, a referrer
+policy, a permissions policy, and a
+`Content-Security-Policy-Report-Only` baseline. The CSP starts in report-only
+mode so inline script and style sources can be inventoried without breaking the
+app. Violations are posted to `/api/csp-report`, which writes `csp.violation`
+events containing only the directive, disposition, document path, sanitized
+source and blocked URLs, and line number. Query strings, fragments, page
+content, and report bodies are not logged, so activation and reset tokens never
+reach the log. Review those events and tighten the policy before switching the
+header to enforcing mode.
+
 ## Architecture
 
 - `src/app` – public, auth, and dashboard routes

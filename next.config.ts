@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+import { buildCspReportOnlyPolicy } from "./src/lib/security/csp";
+
 function r2ImagePattern(): NonNullable<NextConfig["images"]>["remotePatterns"] {
   const base = process.env.R2_PUBLIC_BASE_URL?.trim();
   if (!base) return [];
@@ -49,6 +51,11 @@ const nextConfig: NextConfig = {
       {
         key: "Permissions-Policy",
         value: "camera=(self), microphone=(), geolocation=()",
+      },
+      {
+        // Report-only until the inline script and style inventory is clean.
+        key: "Content-Security-Policy-Report-Only",
+        value: buildCspReportOnlyPolicy(),
       },
     ];
     if (process.env.NODE_ENV === "production") {
