@@ -127,6 +127,59 @@ npm run verify
 database. Run `npm run test:integration` separately, and only after configuring
 the safeguards in [Database safety](#database-safety).
 
+## Continuous integration
+
+GitHub Actions runs `.github/workflows/ci.yml` for pull requests and pushes to
+`master`. It installs from `package-lock.json` with `npm ci` on Node.js 24 and
+runs:
+
+- `npm run lint`
+- `npm run typecheck`
+- `npm test` (unit tests)
+- `npm run test:db` (ephemeral PGlite schema tests)
+- `npm run build`
+
+The ordinary workflow does not run `npm run test:integration` and does not
+require Neon, R2, extraction-provider, or production credentials. The unit and
+PGlite suites use their own test-only `AUTH_SECRET` values and do not connect to
+a configured database.
+
+### Dependency audit
+
+CI also runs `npm audit --omit=dev --audit-level=high` in report-only mode
+(`continue-on-error`). At the time this workflow was introduced, this
+production-dependency audit reported 0 vulnerabilities. A full `npm audit`
+reported 11 moderate findings in development-only tooling:
+`drizzle-kit`/`esbuild` (GHSA-67mh-4wv8-2f99) and
+`typescript-eslint`/`minimatch` (GHSA-g3hv-75wg-m249). These are outside the
+production dependency set and are not fixed automatically. A failing audit does
+not block a merge while the baseline is reviewed. Do not add `npm audit fix`,
+`npm audit fix --force`, or unrelated dependency upgrades to the workflow.
+Triage findings, open a scoped remediation change, and make the step blocking
+only after the baseline is clean and the change is approved.
+
+### Dependabot
+
+`.github/dependabot.yml` checks npm packages and GitHub Actions weekly. Minor and
+patch updates are grouped; major updates remain separate pull requests and
+require manual review. Dependabot does not auto-merge.
+
+### Branch protection
+
+Branch protection is a GitHub repository setting, not a repository file. After
+the workflow has run on a pull request, configure `master` to:
+
+- Require pull requests.
+- Require the `Quality checks` status check from the `CI` workflow (shown in
+  some views as `CI / Quality checks`).
+- Require branches to be up to date before merging.
+- Dismiss stale approvals.
+- Block force pushes and branch deletion.
+- Include administrators where supported.
+
+These settings are intentionally not changed by this repository. The guarded
+Neon integration suite remains a separate, manually configured workflow.
+
 ## Optional integrations
 
 ### Cloudflare R2
