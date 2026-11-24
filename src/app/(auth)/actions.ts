@@ -7,8 +7,6 @@ import {
   clearSessionCookie,
   getCurrentUser,
   readSessionToken,
-  revokeAllUserSessions,
-  revokeSessionByToken,
   setSessionCookie,
 } from "@/lib/auth/session";
 import { formString, safeRedirectPath, type FormState } from "@/lib/action-state";
@@ -19,6 +17,8 @@ import {
   changePassword,
   loginWithPassword,
   resetPasswordWithToken,
+  signOutAllSessions,
+  signOutCurrentSession,
 } from "@/server/services/auth";
 
 function toFormState(error: unknown): FormState {
@@ -90,9 +90,7 @@ export async function activateAction(
 
 export async function logoutAction(): Promise<void> {
   const token = await readSessionToken();
-  if (token) {
-    await revokeSessionByToken(getDb(), token);
-  }
+  await signOutCurrentSession(getDb(), token);
   await clearSessionCookie();
   redirect("/login");
 }
@@ -127,7 +125,7 @@ export async function changePasswordAction(
 export async function signOutEverywhereAction(): Promise<void> {
   const user = await getCurrentUser(getDb());
   if (user) {
-    await revokeAllUserSessions(getDb(), user.id);
+    await signOutAllSessions(getDb(), user.id);
   }
   await clearSessionCookie();
   redirect("/login");

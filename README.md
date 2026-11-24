@@ -32,7 +32,8 @@ content is created only through the management console.
 
    - `DATABASE_URL` (pooled Neon URL) and `DATABASE_URL_DIRECT` (direct URL)
    - `AUTH_SECRET` (32+ random bytes)
-   - Optional `R2_*` and `EXTRACTION_*` values (see below)
+   - Optional `SESSION_IDLE_TIMEOUT_MINUTES` (defaults to 1440), `R2_*`, and
+     `EXTRACTION_*` values (see below)
 
 3. Inspect the migration target (read-only):
 

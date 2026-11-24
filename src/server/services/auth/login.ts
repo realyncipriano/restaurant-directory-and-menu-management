@@ -20,6 +20,24 @@ import { parseOrThrow } from "@/lib/validation/parse";
 import { writeAuditLog } from "../audit";
 import { publicUser, type AuthResult } from "./shared";
 
+async function writeRateLimitAudit(
+  db: DbClient,
+  entry: {
+    scope: "account" | "account_global" | "ip";
+    emailHash: string;
+    limit: number;
+    count: number;
+  },
+): Promise<void> {
+  if (entry.count !== entry.limit + 1) return;
+
+  await writeAuditLog(db, {
+    action: "login_rate_limited",
+    entityType: "auth",
+    details: { scope: entry.scope, emailHash: entry.emailHash },
+  });
+}
+
 export async function loginWithPassword(
   db: DbClient,
   input: {
@@ -47,6 +65,12 @@ export async function loginWithPassword(
     now,
   });
   if (!accountLimit.allowed) {
+    await writeRateLimitAudit(db, {
+      scope: "account",
+      emailHash,
+      limit: LOGIN_ACCOUNT_LIMIT,
+      count: accountLimit.count,
+    });
     throw new RateLimitedError(accountLimit.retryAfterSeconds);
   }
 
@@ -57,6 +81,12 @@ export async function loginWithPassword(
     now,
   });
   if (!globalAccountLimit.allowed) {
+    await writeRateLimitAudit(db, {
+      scope: "account_global",
+      emailHash,
+      limit: LOGIN_ACCOUNT_GLOBAL_LIMIT,
+      count: globalAccountLimit.count,
+    });
     throw new RateLimitedError(globalAccountLimit.retryAfterSeconds);
   }
 
@@ -68,6 +98,12 @@ export async function loginWithPassword(
       now,
     });
     if (!ipLimit.allowed) {
+      await writeRateLimitAudit(db, {
+        scope: "ip",
+        emailHash,
+        limit: LOGIN_IP_LIMIT,
+        count: ipLimit.count,
+      });
       throw new RateLimitedError(ipLimit.retryAfterSeconds);
     }
   }
@@ -80,11 +116,25 @@ export async function loginWithPassword(
 
   if (!user?.passwordHash) {
     await verifyDummyPassword(parsed.password);
+    await writeAuditLog(db, {
+      action: "login_failed",
+      entityType: "auth",
+      details: { reason: "unknown_account", emailHash },
+    });
     throw new InvalidCredentialsError();
   }
 
   const passwordValid = await verifyPassword(user.passwordHash, parsed.password);
   if (!passwordValid || user.accountStatus !== "active") {
+    await writeAuditLog(db, {
+      actor: { id: user.id, email: user.email },
+      action: "login_failed",
+      entityType: "auth",
+      entityId: user.id,
+      details: {
+        reason: passwordValid ? "account_not_active" : "invalid_password",
+      },
+    });
     throw new InvalidCredentialsError();
   }
 

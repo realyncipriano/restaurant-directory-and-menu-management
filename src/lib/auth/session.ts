@@ -1,11 +1,17 @@
 import "server-only";
 
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, lte, or } from "drizzle-orm";
 import { cookies } from "next/headers";
 
 import { sessions, users } from "@/db/schema";
 import type { DbExecutor } from "@/db/types";
-import { SESSION_COOKIE, SESSION_TTL_SECONDS } from "./constants";
+import { logger } from "@/lib/observability/logger";
+import {
+  SESSION_COOKIE,
+  SESSION_LAST_USED_THROTTLE_SECONDS,
+  SESSION_TTL_SECONDS,
+  getSessionIdleTtlSeconds,
+} from "./constants";
 import { generateSecureToken, hashToken } from "./tokens";
 
 export type SessionUser = {
@@ -14,6 +20,7 @@ export type SessionUser = {
   email: string;
   role: "admin" | "authorized_user";
   accountStatus: "invited" | "active" | "deactivated";
+  sessionId: string;
 };
 
 export type CreatedSession = {
@@ -56,7 +63,9 @@ export async function getSessionUserByToken(
       email: users.email,
       role: users.role,
       accountStatus: users.accountStatus,
-      expiresAt: sessions.expiresAt,
+      sessionId: sessions.id,
+      createdAt: sessions.createdAt,
+      lastUsedAt: sessions.lastUsedAt,
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
@@ -73,12 +82,47 @@ export async function getSessionUserByToken(
     return null;
   }
 
+  const lastActivityAt = row.lastUsedAt ?? row.createdAt;
+  if (
+    now.getTime() - lastActivityAt.getTime() >=
+    getSessionIdleTtlSeconds() * 1000
+  ) {
+    return null;
+  }
+
+  const throttleBefore = new Date(
+    now.getTime() - SESSION_LAST_USED_THROTTLE_SECONDS * 1000,
+  );
+  try {
+    await db
+      .update(sessions)
+      .set({ lastUsedAt: now })
+      .where(
+        and(
+          eq(sessions.id, row.sessionId),
+          isNull(sessions.revokedAt),
+          or(
+            isNull(sessions.lastUsedAt),
+            lte(sessions.lastUsedAt, throttleBefore),
+          ),
+        ),
+      );
+  } catch (error) {
+    // Activity bookkeeping must not turn a valid session into a failed request.
+    logger.warn("session.last_used_update_failed", {
+      context: { sessionId: row.sessionId },
+      error,
+      includeErrorDetails: false,
+    });
+  }
+
   return {
     id: row.id,
     name: row.name,
     email: row.email,
     role: row.role,
     accountStatus: row.accountStatus,
+    sessionId: row.sessionId,
   };
 }
 
@@ -100,11 +144,35 @@ export async function revokeAllUserSessions(
   db: DbExecutor,
   userId: string,
   now = new Date(),
-): Promise<void> {
-  await db
+): Promise<number> {
+  const revoked = await db
     .update(sessions)
     .set({ revokedAt: now })
-    .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)));
+    .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)))
+    .returning({ id: sessions.id });
+
+  return revoked.length;
+}
+
+export async function revokeSessionById(
+  db: DbExecutor,
+  userId: string,
+  sessionId: string,
+  now = new Date(),
+): Promise<boolean> {
+  const revoked = await db
+    .update(sessions)
+    .set({ revokedAt: now })
+    .where(
+      and(
+        eq(sessions.id, sessionId),
+        eq(sessions.userId, userId),
+        isNull(sessions.revokedAt),
+      ),
+    )
+    .returning({ id: sessions.id });
+
+  return revoked.length > 0;
 }
 
 export function sessionCookieOptions(expiresAt: Date) {
