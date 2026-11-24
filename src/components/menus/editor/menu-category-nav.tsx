@@ -2,6 +2,7 @@ export type MenuCategoryNavItem = {
   id: string;
   name: string;
   itemCount: number;
+  href?: string;
 };
 
 export function MenuCategoryNav({
@@ -25,7 +26,7 @@ export function MenuCategoryNav({
         {categories.map((category) => (
           <a
             key={category.id}
-            href={`#category-${category.id}`}
+            href={category.href ?? `#category-${category.id}`}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
           >
             {category.name}

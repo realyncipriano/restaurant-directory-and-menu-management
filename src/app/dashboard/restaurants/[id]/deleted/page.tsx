@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import {
   ArrowRight,
   BookOpen,
-  ChevronLeft,
-  ChevronRight,
   ScanLine,
   Trash2,
 } from "lucide-react";
@@ -16,6 +14,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Notice } from "@/components/ui/notice";
 import { PageHeader } from "@/components/ui/page-header";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { getDb } from "@/db/client";
 import { requireAdminUser } from "@/lib/auth/guards";
 import { cn } from "@/lib/cn";
@@ -73,84 +72,6 @@ function dayLabel(days: number): string {
 
 function purgeDate(deletedAt: Date, retentionDays: number): Date {
   return new Date(deletedAt.getTime() + retentionDays * DAY_MS);
-}
-
-function DeletedPager({
-  ariaLabel,
-  page,
-  pageCount,
-  firstItem,
-  lastItem,
-  total,
-  hrefForPage,
-  className,
-}: {
-  ariaLabel: string;
-  page: number;
-  pageCount: number;
-  firstItem: number;
-  lastItem: number;
-  total: number;
-  hrefForPage: (page: number) => string;
-  className?: string;
-}) {
-  return (
-    <nav
-      aria-label={ariaLabel}
-      className={cn(
-        "flex flex-wrap items-center justify-between gap-2",
-        className,
-      )}
-    >
-      {page > 1 ? (
-        <Link
-          href={hrefForPage(page - 1)}
-          scroll={false}
-          className={buttonClass({ variant: "outline", size: "sm" })}
-        >
-          <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-          Newer
-        </Link>
-      ) : (
-        <span
-          className={buttonClass({
-            variant: "outline",
-            size: "sm",
-            className: "pointer-events-none opacity-40",
-          })}
-          aria-disabled="true"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-          Newer
-        </span>
-      )}
-      <span className="text-xs text-zinc-500">
-        Showing {firstItem}–{lastItem} of {total}
-      </span>
-      {page < pageCount ? (
-        <Link
-          href={hrefForPage(page + 1)}
-          scroll={false}
-          className={buttonClass({ variant: "outline", size: "sm" })}
-        >
-          Older
-          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-        </Link>
-      ) : (
-        <span
-          className={buttonClass({
-            variant: "outline",
-            size: "sm",
-            className: "pointer-events-none opacity-40",
-          })}
-          aria-disabled="true"
-        >
-          Older
-          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-        </span>
-      )}
-    </nav>
-  );
 }
 
 export default async function DeletedItemsPage({
@@ -258,7 +179,7 @@ export default async function DeletedItemsPage({
             />
           ) : (
             <>
-              <DeletedPager
+              <PaginationControls
                 ariaLabel="Deleted menus pagination"
                 page={data.menuPage}
                 pageCount={data.menuPageCount}
@@ -314,7 +235,7 @@ export default async function DeletedItemsPage({
                 ))}
               </ul>
 
-              <DeletedPager
+              <PaginationControls
                 ariaLabel="Deleted menus pagination"
                 page={data.menuPage}
                 pageCount={data.menuPageCount}
@@ -396,7 +317,7 @@ export default async function DeletedItemsPage({
                 })}
               </ul>
 
-              <DeletedPager
+              <PaginationControls
                 ariaLabel="Deleted scans pagination"
                 page={data.scanPage}
                 pageCount={data.scanPageCount}

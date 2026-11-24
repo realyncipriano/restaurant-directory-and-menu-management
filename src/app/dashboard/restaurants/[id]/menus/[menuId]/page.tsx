@@ -16,6 +16,7 @@ import { MenuSettingsSection } from "@/components/menus/editor/menu-settings-sec
 import { MenuTreeView } from "@/components/menus/editor/menu-tree-view";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { requireCurrentUser } from "@/lib/auth/guards";
 import { NotFoundError } from "@/lib/errors";
 import {
@@ -25,6 +26,7 @@ import {
   menuStatusTone,
   nextCategorySortOrder,
 } from "@/lib/menu-editor-view";
+import { paginateMenuTreeCategories } from "@/lib/menu-tree-pagination";
 import { isImageStorageConfigured } from "@/server/services/images";
 import { getMenuManagement } from "@/server/services/menus";
 
@@ -32,6 +34,26 @@ export const metadata: Metadata = {
   title: "Menu editor",
   robots: { index: false, follow: false },
 };
+
+function menuPageHref(
+  restaurantId: string,
+  menuId: string,
+  page: number,
+): string {
+  const base = `/dashboard/restaurants/${restaurantId}/menus/${menuId}`;
+  return page > 1 ? `${base}?page=${page}` : base;
+}
+
+function menuCategoryHref(
+  restaurantId: string,
+  menuId: string,
+  categoryId: string,
+  page: number,
+): string {
+  const base = `/dashboard/restaurants/${restaurantId}/menus/${menuId}`;
+  const query = page > 1 ? `?page=${page}` : "";
+  return `${base}${query}#category-${categoryId}`;
+}
 
 export default async function MenuEditorPage({
   params,
@@ -41,6 +63,7 @@ export default async function MenuEditorPage({
   searchParams: Promise<{
     notice?: string | string[];
     error?: string | string[];
+    page?: string | string[];
   }>;
 }) {
   const user = await requireCurrentUser();
@@ -61,6 +84,22 @@ export default async function MenuEditorPage({
   const { restaurant, flags } = access;
   const notice = typeof query.notice === "string" ? query.notice : undefined;
   const error = typeof query.error === "string" ? query.error : undefined;
+  const pageParam = Number.parseInt(
+    typeof query.page === "string" ? query.page.trim() : "",
+    10,
+  );
+  const readOnlyPagination = isDeleted
+    ? paginateMenuTreeCategories(tree.categories, {
+        page: Number.isFinite(pageParam) ? pageParam : 1,
+      })
+    : null;
+  const visibleCategories = readOnlyPagination
+    ? readOnlyPagination.categories
+    : tree.categories;
+  const readOnlyPager =
+    readOnlyPagination && readOnlyPagination.pageCount > 1
+      ? readOnlyPagination
+      : null;
   const lineageHasPublished = versions.some(
     (version) => version.status === "published",
   );
@@ -112,6 +151,14 @@ export default async function MenuEditorPage({
           id: category.id,
           name: category.name,
           itemCount: category.items.length,
+          href: readOnlyPagination
+            ? menuCategoryHref(
+                restaurant.id,
+                menu.id,
+                category.id,
+                readOnlyPagination.categoryPages[category.id] ?? 1,
+              )
+            : undefined,
         }))}
       />
 
@@ -150,9 +197,39 @@ export default async function MenuEditorPage({
               ) : null}
             </div>
 
+            {readOnlyPager ? (
+              <PaginationControls
+                ariaLabel="Read-only menu items pagination"
+                page={readOnlyPager.page}
+                pageCount={readOnlyPager.pageCount}
+                firstItem={readOnlyPager.firstItem}
+                lastItem={readOnlyPager.lastItem}
+                total={readOnlyPager.totalItems}
+                hrefForPage={(page) =>
+                  menuPageHref(restaurant.id, menu.id, page)
+                }
+                className="mt-4 border-b border-zinc-200 pb-4"
+              />
+            ) : null}
+
             <div className="mt-6">
-              <MenuTreeView categories={tree.categories} />
+              <MenuTreeView categories={visibleCategories} />
             </div>
+
+            {readOnlyPager ? (
+              <PaginationControls
+                ariaLabel="Read-only menu items pagination"
+                page={readOnlyPager.page}
+                pageCount={readOnlyPager.pageCount}
+                firstItem={readOnlyPager.firstItem}
+                lastItem={readOnlyPager.lastItem}
+                total={readOnlyPager.totalItems}
+                hrefForPage={(page) =>
+                  menuPageHref(restaurant.id, menu.id, page)
+                }
+                className="mt-4 border-t border-zinc-200 pt-4"
+              />
+            ) : null}
           </CardBody>
         </Card>
       ) : (
