@@ -321,4 +321,5 @@ Record each drill in the operations log:
 
 | Date | Type | Backup file | Operator | Result | Notes |
 | --- | --- | --- | --- | --- | --- |
+| 2026-11-25 | synthetic | `n/a` (ephemeral) | automation | pass | 19 tables / 23 rows; tamper rejection; verified restore; second-restore rejection. Real-source drill still pending valid disposable credentials. |
 | YYYY-MM-DD | synthetic / real | file name or `n/a` | name | pass/fail | follow-ups |
