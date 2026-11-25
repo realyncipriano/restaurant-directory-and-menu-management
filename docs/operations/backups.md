@@ -141,6 +141,19 @@ and reads the encrypted file, decrypts, rejects a tampered copy, restores into
 a second empty PGlite database, verifies all checksums, and confirms a second
 restore is rejected.
 
+To rehearse restoring an actual encrypted backup without any database
+credentials, point the drill at the file:
+
+```bash
+npm run db:restore:drill -- --file backups/<file>.rdmm.enc
+```
+
+This decrypts the file with `BACKUP_ENCRYPTION_KEY`, starts an empty in-process
+PGlite database at the current migration level, restores every table, verifies
+all checksums, and confirms a second restore is rejected. It never connects to
+a configured database, but it does process production data in memory. Do not
+log or export the restored rows.
+
 Quarterly, also restore a real backup into a disposable Neon branch or database:
 
 ```bash
@@ -323,5 +336,6 @@ Record each drill in the operations log:
 
 | Date | Type | Backup file | Operator | Result | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 2026-11-25 | synthetic | `n/a` (ephemeral) | automation | pass | 19 tables / 23 rows; tamper rejection; verified restore; second-restore rejection. Real-source drill still pending valid disposable credentials. |
-| YYYY-MM-DD | synthetic / real | file name or `n/a` | name | pass/fail | follow-ups |
+| 2026-11-25 | synthetic | `n/a` (ephemeral) | automation | pass | 19 tables / 23 rows; tamper rejection; verified restore; second-restore rejection. |
+| 2026-11-25 | real backup / PGlite target | `rdmm-backup-20261125T020813461Z-db779a41.rdmm.enc` | automation | pass | Offsite artifact; 19 tables / 669 rows; checksums verified; second-restore rejection. Neon-target drill still pending disposable credentials. |
+| YYYY-MM-DD | synthetic / real backup / real Neon target | file name or `n/a` | name | pass/fail | follow-ups |
