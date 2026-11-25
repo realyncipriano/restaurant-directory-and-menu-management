@@ -269,14 +269,16 @@ The restore command:
 A backup on the same machine as the application is not disaster recovery. Keep
 at least one copy outside the application host and the database provider.
 
-- The optional GitHub Actions workflow (`.github/workflows/backup.yml`) creates
-  an encrypted backup and uploads it as an Actions artifact. It is inert until
-  all of the following are configured:
+- The GitHub Actions workflow (`.github/workflows/backup.yml`) creates an
+  encrypted backup and uploads it as an Actions artifact. It runs daily at
+  02:00 UTC and can also be dispatched manually. It is gated by:
   - repository variable `BACKUP_ENABLED=true`
   - secret `BACKUP_DATABASE_URL` (direct Neon connection string)
   - secret `BACKUP_ENCRYPTION_KEY`
-- Run it manually from the Actions tab first. To enable the daily schedule,
-  uncomment the `schedule` block and confirm retention and alerting.
+- A failed backup or freshness check fails the workflow run. Confirm that the
+  people who respond to incidents receive GitHub Actions notifications, and add
+  external alerting if a missed run is unacceptable. Remove the `schedule`
+  block to pause automated backups.
 - Download important artifacts to an encrypted vault or password-manager file
   store. Artifact retention is not the same as disaster-recovery retention.
 - Never upload unencrypted backups to a public bucket, issue tracker, chat, or
