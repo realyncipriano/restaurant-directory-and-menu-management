@@ -37,6 +37,9 @@ yarn-error.log*
 # local diagnostics
 *.out
 
+# encrypted database backups (never commit backup artifacts)
+/backups/
+
 # vercel
 .vercel
 

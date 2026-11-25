@@ -32,6 +32,8 @@ content is created only through the management console.
 
    - `DATABASE_URL` (pooled Neon URL) and `DATABASE_URL_DIRECT` (direct URL)
    - `AUTH_SECRET` (32+ random bytes)
+   - `BACKUP_ENCRYPTION_KEY` (32+ random bytes, required to create or restore
+     backups; generate one and store it in a password manager)
    - Optional `MFA_ENCRYPTION_KEY` (32+ random bytes, recommended in
      production), `MFA_REQUIRED_FOR_ADMINS` (defaults to off),
      `SESSION_IDLE_TIMEOUT_MINUTES` (defaults to 1440), `R2_*`, and
@@ -103,6 +105,28 @@ contains tables but has no Drizzle migration journal, and it never drops tables
 or resets data. `npm run test:db` uses an ephemeral in-process Postgres (PGlite)
 to validate migrations and constraints without connecting to any configured
 database.
+
+## Backups and disaster recovery
+
+Encrypted, checksummed logical backups cover every application table. Backups
+are AES-256-GCM encrypted with `BACKUP_ENCRYPTION_KEY` and written to the
+gitignored `backups/` directory. Restores are transactional, verify checksums
+before and after writing, require a fresh empty target with a matching
+migration count, and refuse targets that match a configured application,
+development, or test database.
+
+```bash
+npm run db:backup                 # create an encrypted local backup
+npm run db:backup:check           # decrypt, verify checksums, check freshness
+npm run db:restore:drill          # full synthetic export/restore drill (no credentials)
+npm run db:restore -- --file backups/<file>.rdmm.enc --migrate
+```
+
+Real restores are gated by `RESTORE_DATABASE_URL`, `RESTORE_CONFIRM=RESTORE`,
+and `ALLOW_DESTRUCTIVE_DB_TESTS=1`. By default they revoke restored sessions,
+auth tokens, and MFA challenges. See
+[docs/operations/backups.md](docs/operations/backups.md) for setup, key
+management, scheduling, the restore runbook, and the drill log.
 
 ## Testing
 
