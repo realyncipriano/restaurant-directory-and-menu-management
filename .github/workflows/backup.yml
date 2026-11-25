@@ -1,0 +1,75 @@
+name: Database backup
+
+on:
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: "Encrypted artifact retention in days (1-90)"
+        required: false
+        default: "30"
+  # Enable this schedule only after BACKUP_ENABLED=true, the secrets below, and
+  # an offsite-retention review are in place.
+  # schedule:
+  #   - cron: "0 2 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Encrypted backup
+    if: vars.BACKUP_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify backup secrets are configured
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BACKUP_ENCRYPTION_KEY:-}" ]; then
+            echo "Missing BACKUP_ENCRYPTION_KEY repository secret."
+            exit 1
+          fi
+          if [ -z "${BACKUP_DATABASE_URL:-}" ]; then
+            echo "Missing BACKUP_DATABASE_URL repository secret."
+            exit 1
+          fi
+
+      - name: Create encrypted backup
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          DATABASE_URL_DIRECT: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: npm run db:backup -- --no-prune
+
+      - name: Verify the new backup
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: npm run db:backup:check -- --max-age-hours 1
+
+      - name: Upload encrypted artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rdmm-backup-${{ github.run_id }}
+          path: backups/*.rdmm.enc
+          retention-days: ${{ inputs.retention_days || 30 }}
+          if-no-files-found: error

@@ -19,6 +19,10 @@
     "db:migrate:test": "tsx scripts/verify-test-db.ts && tsx scripts/db-migrate.ts --test",
     "db:seed:admin": "tsx scripts/seed-admin.ts",
     "db:recover:admin": "tsx scripts/recover-admin.ts",
+    "db:backup": "tsx scripts/db-backup.ts",
+    "db:backup:check": "tsx scripts/db-backup-check.ts",
+    "db:restore": "tsx scripts/db-restore.ts",
+    "db:restore:drill": "tsx scripts/db-restore-drill.ts",
     "db:studio": "drizzle-kit studio",
     "check": "npm run lint && npm run typecheck && npm test",
     "verify": "npm run check && npm run test:db && npm run build"
