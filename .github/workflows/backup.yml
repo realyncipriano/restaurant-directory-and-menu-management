@@ -7,10 +7,11 @@ on:
         description: "Encrypted artifact retention in days (1-90)"
         required: false
         default: "30"
-  # Enable this schedule only after BACKUP_ENABLED=true, the secrets below, and
-  # an offsite-retention review are in place.
-  # schedule:
-  #   - cron: "0 2 * * *"
+  # Daily at 02:00 UTC. A failed backup or freshness check fails the run;
+  # configure GitHub Actions notifications for responders. Remove this block
+  # to pause automated backups.
+  schedule:
+    - cron: "0 2 * * *"
 
 permissions:
   contents: read
@@ -67,9 +68,11 @@ jobs:
         run: npm run db:backup:check -- --max-age-hours 1
 
       - name: Upload encrypted artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rdmm-backup-${{ github.run_id }}
           path: backups/*.rdmm.enc
           retention-days: ${{ inputs.retention_days || 30 }}
           if-no-files-found: error
+          # Backups are already gzipped and encrypted; skip recompression.
+          compression-level: 0

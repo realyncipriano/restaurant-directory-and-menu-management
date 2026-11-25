@@ -141,6 +141,19 @@ and reads the encrypted file, decrypts, rejects a tampered copy, restores into
 a second empty PGlite database, verifies all checksums, and confirms a second
 restore is rejected.
 
+To rehearse restoring an actual encrypted backup without any database
+credentials, point the drill at the file:
+
+```bash
+npm run db:restore:drill -- --file backups/<file>.rdmm.enc
+```
+
+This decrypts the file with `BACKUP_ENCRYPTION_KEY`, starts an empty in-process
+PGlite database at the current migration level, restores every table, verifies
+all checksums, and confirms a second restore is rejected. It never connects to
+a configured database, but it does process production data in memory. Do not
+log or export the restored rows.
+
 Quarterly, also restore a real backup into a disposable Neon branch or database:
 
 ```bash
@@ -269,14 +282,16 @@ The restore command:
 A backup on the same machine as the application is not disaster recovery. Keep
 at least one copy outside the application host and the database provider.
 
-- The optional GitHub Actions workflow (`.github/workflows/backup.yml`) creates
-  an encrypted backup and uploads it as an Actions artifact. It is inert until
-  all of the following are configured:
+- The GitHub Actions workflow (`.github/workflows/backup.yml`) creates an
+  encrypted backup and uploads it as an Actions artifact. It runs daily at
+  02:00 UTC and can also be dispatched manually. It is gated by:
   - repository variable `BACKUP_ENABLED=true`
   - secret `BACKUP_DATABASE_URL` (direct Neon connection string)
   - secret `BACKUP_ENCRYPTION_KEY`
-- Run it manually from the Actions tab first. To enable the daily schedule,
-  uncomment the `schedule` block and confirm retention and alerting.
+- A failed backup or freshness check fails the workflow run. Confirm that the
+  people who respond to incidents receive GitHub Actions notifications, and add
+  external alerting if a missed run is unacceptable. Remove the `schedule`
+  block to pause automated backups.
 - Download important artifacts to an encrypted vault or password-manager file
   store. Artifact retention is not the same as disaster-recovery retention.
 - Never upload unencrypted backups to a public bucket, issue tracker, chat, or
@@ -321,5 +336,6 @@ Record each drill in the operations log:
 
 | Date | Type | Backup file | Operator | Result | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 2026-11-25 | synthetic | `n/a` (ephemeral) | automation | pass | 19 tables / 23 rows; tamper rejection; verified restore; second-restore rejection. Real-source drill still pending valid disposable credentials. |
-| YYYY-MM-DD | synthetic / real | file name or `n/a` | name | pass/fail | follow-ups |
+| 2026-11-25 | synthetic | `n/a` (ephemeral) | automation | pass | 19 tables / 23 rows; tamper rejection; verified restore; second-restore rejection. |
+| 2026-11-25 | real backup / PGlite target | `rdmm-backup-20261125T020813461Z-db779a41.rdmm.enc` | automation | pass | Offsite artifact; 19 tables / 669 rows; checksums verified; second-restore rejection. Neon-target drill still pending disposable credentials. |
+| YYYY-MM-DD | synthetic / real backup / real Neon target | file name or `n/a` | name | pass/fail | follow-ups |

@@ -13,12 +13,14 @@ import {
 } from "../src/db/backup";
 import type { DbClient } from "../src/db/client";
 import {
+  assertBackupKey,
   decryptBackup,
   encryptBackup,
   type BackupPayload,
 } from "../src/lib/backups/crypto";
 import { createEphemeralDb } from "../tests/db/ephemeral-db";
 import {
+  argument,
   formatBytes,
   readBackupFile,
   writeBackupFile,
@@ -54,13 +56,62 @@ function assertPayloadEqual(
   }
 }
 
-async function main() {
+async function assertSecondRestoreRejected(
+  db: BackupDb,
+  payload: BackupPayload,
+): Promise<void> {
+  let nonEmptyRejected = false;
+  try {
+    await restoreBackup(db, payload);
+  } catch (error) {
+    nonEmptyRejected =
+      error instanceof Error && /non-empty/u.test(error.message);
+    if (!nonEmptyRejected) throw error;
+  }
+  if (!nonEmptyRejected) {
+    throw new Error("Empty-target guard failed: the drill restored twice.");
+  }
+  console.log("Empty-target guard: second restore rejected.");
+}
+
+async function restoreIntoEmptyDatabase(
+  payload: BackupPayload,
+): Promise<void> {
+  const target = await createEphemeralDb();
+  try {
+    const targetDb = target.db as unknown as BackupDb;
+    const report = await restoreBackup(targetDb, payload);
+    if (!report.verified) {
+      throw new Error("Restore report did not verify the restored data.");
+    }
+    await verifyBackupDatabase(targetDb, payload);
+    console.log(
+      `Restore: ${report.totalRows} rows across ${report.tables.length} tables; checksums verified.`,
+    );
+    await assertSecondRestoreRejected(targetDb, payload);
+  } finally {
+    await target.client.close();
+  }
+}
+
+async function runBackupFileDrill(file: string): Promise<void> {
+  const payload = decryptBackup(
+    readBackupFile(path.resolve(process.cwd(), file)),
+    assertBackupKey(process.env.BACKUP_ENCRYPTION_KEY),
+  );
+  console.log("Restore drill (existing backup)");
+  console.log(
+    `Backup: ${payload.createdAt}; commit ${payload.commit ?? "unknown"}; ${payload.tables.length} tables, ${payload.totalRows} rows, schema ${payload.schemaMigrations}.`,
+  );
+  await restoreIntoEmptyDatabase(payload);
+  console.log("Restore drill passed.");
+}
+
+async function runSyntheticDrill(): Promise<void> {
   const temporaryDirectory = mkdtempSync(
     path.join(tmpdir(), "rdmm-restore-drill-"),
   );
   const source = await createEphemeralDb();
-  let target: Awaited<ReturnType<typeof createEphemeralDb>> | null = null;
-
   try {
     const sourceDb = source.db as unknown as BackupDb;
     await seedRestoreDrillData(source.db as unknown as DbClient);
@@ -103,35 +154,20 @@ async function main() {
     }
     console.log("Tamper detection: modified ciphertext rejected.");
 
-    target = await createEphemeralDb();
-    const targetDb = target.db as unknown as BackupDb;
-    const report = await restoreBackup(targetDb, roundTripped);
-    if (!report.verified) {
-      throw new Error("Restore report did not verify the restored data.");
-    }
-    await verifyBackupDatabase(targetDb, roundTripped);
-    console.log(
-      `Restore: ${report.totalRows} rows across ${report.tables.length} tables; checksums verified.`,
-    );
-
-    let nonEmptyRejected = false;
-    try {
-      await restoreBackup(targetDb, roundTripped);
-    } catch (error) {
-      nonEmptyRejected =
-        error instanceof Error && /non-empty/u.test(error.message);
-      if (!nonEmptyRejected) throw error;
-    }
-    if (!nonEmptyRejected) {
-      throw new Error("Empty-target guard failed: the drill restored twice.");
-    }
-    console.log("Empty-target guard: second restore rejected.");
-
+    await restoreIntoEmptyDatabase(roundTripped);
     console.log("Restore drill passed.");
   } finally {
-    await target?.client.close();
     await source.client.close();
     rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+}
+
+async function main() {
+  const file = argument("file");
+  if (file) {
+    await runBackupFileDrill(file);
+  } else {
+    await runSyntheticDrill();
   }
 }
 
